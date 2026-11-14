@@ -1,221 +1,272 @@
 import Phaser from 'phaser';
 import './style.css';
 
-const W = 540, H = 850, LANES = [100, 270, 440];
-const TOP = 78, BOTTOM = 674, MID = 370;
+// Prototype 0.2: two side-view lanes that converge at each enemy castle.
+const W = 960, H = 600;
+const LANES = [155, 355], FIELD_BOTTOM = 485;
+const BLUE = 0x438dcc, RED = 0xc9594a;
 const CARDS = [
-  { name: 'Legionair', cost: 3, hp: 190, damage: 30, range: 31, speed: 45, rate: 0.85, color: 0xb6cad4, kind: 'melee' },
-  { name: 'Boogschutter', cost: 4, hp: 95, damage: 26, range: 120, speed: 37, rate: 1.0, color: 0xd9b46a, kind: 'ranged' },
-  { name: 'Kanon', cost: 6, hp: 240, damage: 88, range: 155, speed: 18, rate: 2.2, color: 0x847d73, kind: 'cannon' },
+  {name:'Legionair',cost:3,hp:240,damage:36,range:35,speed:56,rate:.9,type:'melee'},
+  {name:'Boogschutter',cost:4,hp:130,damage:29,range:155,speed:46,rate:1.2,type:'archer'},
+  {name:'Kanon',cost:6,hp:300,damage:105,range:185,speed:26,rate:2.5,type:'cannon'}
 ];
-const opposing = side => side === 'blue' ? 'red' : 'blue';
-const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+const clamp = (n,a,b) => Math.max(a, Math.min(b,n));
+const distance = (a,b) => Math.hypot(a.x-b.x,a.y-b.y);
+const enemyOf = side => side === 'blue' ? 'red' : 'blue';
 
 class Battle extends Phaser.Scene {
-  constructor() { super('battle'); }
+  constructor(){super('battle');}
 
-  create() {
-    this.units = []; this.effects = []; this.structures = []; this.energy = {blue: 6, red: 6};
-    this.selected = 0; this.elapsed = 0; this.enemyClock = 2; this.ended = false;
-    this.add.rectangle(W/2, H/2, W, H, 0x304b34);
-    this.arena = this.add.graphics().setDepth(0);
-    this.actors = this.add.graphics().setDepth(2);
-    this.hud = this.add.graphics().setDepth(4);
-    this.labels = this.add.container(0, 0).setDepth(5);
-    this.drawArena();
-    for (let lane = 0; lane < 3; lane++) {
-      this.structures.push({ side: 'red', lane, y: 175, hp: 800, max: 800, kind: 'tower' });
-      this.structures.push({ side: 'blue', lane, y: 565, hp: 800, max: 800, kind: 'tower' });
+  create(){
+    this.add.rectangle(W/2,H/2,W,H,0x496e46);
+    this.backdrop=this.add.graphics().setDepth(0);
+    this.structures=[];this.units=[];this.effects=[];
+    this.visuals=this.add.graphics().setDepth(2);
+    this.ui=this.add.graphics().setDepth(4);
+    this.energy={blue:6,red:6};this.selected=0;this.elapsed=0;this.enemyClock=2;
+    this.ended=false;this.unitId=0;
+    for(const side of ['blue','red']){
+      for(let lane=0;lane<2;lane++){
+        this.structures.push({kind:'tower',side,lane,x:side==='blue'?150:810,y:LANES[lane],hp:850,max:850,cd:0});
+      }
+      this.structures.push({kind:'castle',side,lane:-1,x:side==='blue'?55:905,y:255,hp:2400,max:2400,cd:0});
     }
-    this.structures.push({side: 'red', lane: 1, y: 89, hp: 2000, max: 2000, kind: 'nexus'});
-    this.structures.push({side: 'blue', lane: 1, y: 647, hp: 2000, max: 2000, kind: 'nexus'});
-    this.statusText = this.add.text(W/2, 24, '', { fontFamily: 'system-ui', fontSize: '16px', color: '#fff1cf', fontStyle: 'bold' }).setOrigin(.5).setDepth(8);
-    this.helpText = this.add.text(W/2, 696, 'Kies een kaart en klik op je helft van een baan', {fontFamily:'system-ui',fontSize:'12px',color:'#efe8d0'}).setOrigin(.5).setDepth(6);
-    this.cardButtons = CARDS.map((c,i) => {
-      const x = 95 + i*174;
-      const zone = this.add.zone(x, 778, 154, 100).setInteractive({useHandCursor:true}).setDepth(9);
-      zone.on('pointerdown', () => { if (!this.ended) this.selected = i; });
-      const t = this.add.text(x, 791, c.name + '\n' + c.cost + ' energie', {fontFamily:'system-ui',fontSize:'14px',color:'#fff8dc',align:'center',fontStyle:'bold'}).setOrigin(.5).setDepth(9);
-      return {x, zone, text:t};
+    this.drawArena();
+    this.header=this.add.text(W/2,20,'',{fontFamily:'system-ui',fontSize:'19px',fontStyle:'bold',color:'#fdf1d1',stroke:'#2c241b',strokeThickness:4}).setOrigin(.5).setDepth(7);
+    this.message=this.add.text(W/2,464,'Kies een kaart en klik op de bovenste of onderste baan',{fontFamily:'system-ui',fontSize:'14px',color:'#fff1cb'}).setOrigin(.5).setDepth(7);
+    this.buttons=CARDS.map((card,i)=>{
+      const x=178+i*302;
+      const zone=this.add.zone(x,551,277,81).setInteractive({useHandCursor:true}).setDepth(9);
+      zone.on('pointerdown',()=>{if(!this.ended)this.selected=i;});
+      this.add.text(x,552,card.name.toUpperCase()+'  •  '+card.cost+' energie',{fontFamily:'system-ui',fontSize:'19px',fontStyle:'bold',color:'#fff8e0',align:'center'}).setOrigin(.5).setDepth(8);
+      return {x,zone};
     });
-    this.input.on('pointerdown', p => {
-      if (this.ended || p.y >= 724 || p.y < MID + 23 || p.y > 624) return;
-      const lane = LANES.reduce((best, x, i) => Math.abs(x-p.x) < Math.abs(LANES[best]-p.x) ? i : best, 0);
-      this.spawn('blue', lane, this.selected, clamp(p.y, MID+38, 620));
+    this.input.on('pointerdown',p=>{
+      if(this.ended || p.y >= FIELD_BOTTOM || p.y<75 || p.x>470 || p.x<115)return;
+      const lane=Math.abs(p.y-LANES[0])<=Math.abs(p.y-LANES[1])?0:1;
+      if(Math.abs(p.y-LANES[lane])>70)return;
+      if(!this.spawn('blue',lane,this.selected,clamp(p.x,205,420))){
+        this.message.setText('Niet genoeg energie voor deze kaart');
+      } else {
+        this.message.setText('Boven en onder verdedigen, daarna samen naar het kasteel!');
+      }
     });
-    this.input.keyboard?.on('keydown-R', () => this.scene.restart());
+    this.input.keyboard?.on('keydown-R',()=>this.scene.restart());
   }
 
-  drawArena() {
-    const g = this.arena;
-    for(let i=0;i<34;i++){
-      const x=(i*137+21)%W, y=(i*211+69)%690;
-      g.fillStyle(i%2 ? 0x466e45:0x527948,.55).fillCircle(x,y,7+i%5);
+  drawArena(){
+    const g=this.backdrop;
+    // Flat side-on lanes separated by scenery, with a shared endpoint at each castle.
+    g.fillStyle(0x6e965a).fillRect(0,48,W,FIELD_BOTTOM-48);
+    for(let i=0;i<65;i++){
+      const x=(i*149+47)%W,y=62+(i*193)%(FIELD_BOTTOM-68);
+      g.fillStyle(i%2?0x527944:0x83a45d,.4).fillCircle(x,y,3+i%6);
     }
-    for(const x of LANES) {
-      g.fillStyle(0xbba584).fillRoundedRect(x-48,TOP,96,BOTTOM-TOP,15);
-      g.lineStyle(1,0x99866c,.35);
-      for(let y=TOP+12;y<BOTTOM;y+=25) {
-        g.lineBetween(x-44,y,x+44,y);
-        g.lineBetween(x-22+(y%3)*9,y,x-22+(y%3)*9,y+23);
+    for(const y of LANES){
+      g.fillStyle(0x9c8769).fillRoundedRect(100,y-42,760,88,19);
+      g.fillStyle(0xc4ab82).fillRoundedRect(100,y-37,760,77,17);
+      g.lineStyle(2,0xe0c59a,.6).lineBetween(100,y+31,860,y+31);
+      for(let x=120;x<855;x+=38){
+        g.lineStyle(1,0x907d61,.25).lineBetween(x,y-36,x,y+38);
       }
     }
-    g.fillStyle(0x287b99).fillRect(0,MID-19,W,38);
-    for(let i=0;i<15;i++) {g.lineStyle(2,0x8fc2d3,.24);g.lineBetween((i*71)%W,MID-11,(i*71)%W+25,MID-11);}
-    for(const x of LANES){
-      g.fillStyle(0xcfb98d).fillRoundedRect(x-49,MID-24,98,48,4);
-      g.lineStyle(2,0x867354,.6); g.strokeRoundedRect(x-49,MID-24,98,48,4);
-      for(let dx=-30;dx<=30;dx+=15)g.lineBetween(x+dx,MID-22,x+dx,MID+22);
+    // The two roads visually join near the castles.
+    g.lineStyle(24,0xb79c72,.9);
+    g.beginPath();g.moveTo(115,LANES[0]);g.lineTo(75,255);g.lineTo(115,LANES[1]);g.strokePath();
+    g.beginPath();g.moveTo(845,LANES[0]);g.lineTo(885,255);g.lineTo(845,LANES[1]);g.strokePath();
+    g.lineStyle(16,0xd6b88a,.8);
+    g.beginPath();g.moveTo(115,LANES[0]);g.lineTo(75,255);g.lineTo(115,LANES[1]);g.strokePath();
+    g.beginPath();g.moveTo(845,LANES[0]);g.lineTo(885,255);g.lineTo(845,LANES[1]);g.strokePath();
+    // Ruins, trees and distant walls, painted with simple shapes for now.
+    for(const [x,y] of [[280,70],[365,72],[576,69],[665,74],[312,283],[635,274]]){
+      g.fillStyle(0x567b4a).fillEllipse(x,y+13,60,18);
+      g.fillStyle(0x31583c).fillCircle(x,y-10,18);
+      g.fillStyle(0x729957).fillCircle(x-8,y-19,15);
     }
-    g.lineStyle(2,0x91cae7,.6).lineBetween(0,MID+28,W,MID+28);
-    g.lineStyle(3,0x1c3022,.8).strokeRect(3,55,W-6,627);
-    this.add.text(17,94,'VIJAND', {color:'#ffe0db',fontFamily:'system-ui',fontSize:'12px',fontStyle:'bold'}).setDepth(1);
-    this.add.text(17,650,'JIJ', {color:'#c4ebff',fontFamily:'system-ui',fontSize:'12px',fontStyle:'bold'}).setDepth(1);
+    g.lineStyle(4,0x283f30).strokeRoundedRect(5,49,950,436,9);
+    this.add.text(260,102,'BOVENSTE FRONT',{color:'#f6e6c4',fontFamily:'system-ui',fontSize:'12px',fontStyle:'bold'}).setDepth(1);
+    this.add.text(260,303,'ONDERSTE FRONT',{color:'#f6e6c4',fontFamily:'system-ui',fontSize:'12px',fontStyle:'bold'}).setDepth(1);
+    this.add.text(23,423,'JOUW KASTEEL',{color:'#d0edff',fontFamily:'system-ui',fontSize:'12px',fontStyle:'bold'}).setDepth(1);
+    this.add.text(833,423,'VIJAND',{color:'#ffe1d4',fontFamily:'system-ui',fontSize:'12px',fontStyle:'bold'}).setDepth(1);
   }
 
-  spawn(side, lane, cardIndex, y) {
-    const card = CARDS[cardIndex];
-    if(this.ended || this.energy[side]<card.cost) return false;
+  spawn(side,lane,index,x){
+    const card=CARDS[index];
+    if(this.ended || this.energy[side]+.001<card.cost)return false;
     this.energy[side]-=card.cost;
-    this.units.push({side,lane,y,card, hp:card.hp,max:card.hp,cd:0,flash:0});
+    const pos=side==='blue'?clamp(x,205,420):clamp(x,540,755);
+    const offset=(this.unitId++%3-1)*10;
+    this.units.push({id:this.unitId,side,lane,x:pos,y:LANES[lane]+offset,hp:card.hp,max:card.hp,card,cd:0,flash:0,merged:false});
     return true;
   }
 
-  targetFor(unit) {
-    const enemies = this.units.filter(e => e.side !== unit.side && e.lane === unit.lane && e.hp>0);
-    enemies.sort((a,b)=>Math.abs(a.y-unit.y)-Math.abs(b.y-unit.y));
-    const enemy = enemies[0];
-    if(enemy && Math.abs(enemy.y-unit.y) < 145) return enemy;
-    const tower=this.structures.find(s=>s.kind==='tower' && s.side!==unit.side && s.lane===unit.lane && s.hp>0);
-    return tower ?? this.structures.find(s=>s.kind==='nexus'&&s.side!==unit.side);
+  getEnemyStructure(u){
+    const tower=this.structures.find(s=>s.side!==u.side&&s.kind==='tower'&&s.lane===u.lane&&s.hp>0);
+    return tower ?? this.structures.find(s=>s.side!==u.side&&s.kind==='castle');
   }
 
-  hit(target, amount, attacker) {
-    if(!target || target.hp<=0)return;
-    target.hp=Math.max(0,target.hp-amount);
-    if(attacker.card.kind!=='melee') this.effects.push({x:LANES[attacker.lane],y:attacker.y,tx:LANES[attacker.lane],ty:target.y,life:.22,color:attacker.card.kind==='cannon'?0xffa445:0xffe2a1});
-    if(target.hp<=0 && target.kind==='nexus')this.finish(attacker.side);
+  targetFor(u){
+    const direction=u.side==='blue'?1:-1;
+    // Before the lane tower falls, only fight inside your lane. Afterward
+    // a shared castle approach allows both lanes to reinforce one another.
+    const candidates=this.units.filter(e=>
+      e.side!==u.side && e.hp>0 &&
+      (e.lane===u.lane || (u.merged && e.merged)) &&
+      (e.x-u.x)*direction>-35 &&
+      distance(u,e)<190
+    ).sort((a,b)=>distance(u,a)-distance(u,b));
+    return candidates[0]??this.getEnemyStructure(u);
   }
 
-  finish(side) {
+  moveToward(u,target,dt){
+    const dx=target.x-u.x,dy=target.y-u.y;
+    const len=Math.hypot(dx,dy);
+    if(len<1)return;
+    const step=Math.min(len,u.card.speed*dt);
+    u.x+=(dx/len)*step;u.y+=(dy/len)*step;
+  }
+
+  hit(attacker,target){
+    if(target.hp<=0)return;
+    target.hp=Math.max(0,target.hp-attacker.card.damage);
+    attacker.flash=.16;
+    if(attacker.card.type!=='melee'){
+      this.effects.push({x:attacker.x,y:attacker.y-15,tx:target.x,ty:target.y-10,life:.23,max:.23,color:attacker.card.type==='cannon'?0xffa85e:0xffeea3});
+    }
+    if(target.kind==='castle'&&target.hp===0)this.finish(attacker.side);
+  }
+
+  finish(winner){
     if(this.ended)return;
     this.ended=true;
-    this.add.rectangle(W/2,360,465,140,0x152b24,.94).setStrokeStyle(3,0xf6dc97).setDepth(12);
-    this.add.text(W/2,342,side==='blue'?'OVERWINNING!':'VERLOREN!',{fontFamily:'system-ui',fontSize:'33px',fontStyle:'bold',color:side==='blue'?'#b4edbc':'#ffb7ac'}).setOrigin(.5).setDepth(13);
-    const restart=this.add.text(W/2,392,'Klik hier om opnieuw te spelen',{fontFamily:'system-ui',fontSize:'16px',color:'#fff1ce'}).setOrigin(.5).setDepth(13).setInteractive({useHandCursor:true});
-    restart.on('pointerdown',()=>this.scene.restart());
+    this.add.rectangle(W/2,251,540,150,0x162720,.95).setStrokeStyle(3,0xe8c683).setDepth(20);
+    this.add.text(W/2,225,winner==='blue'?'OVERWINNING!':'VERLOREN!',{fontFamily:'system-ui',fontSize:'38px',fontStyle:'bold',color:winner==='blue'?'#b8efbd':'#ffbeb6'}).setOrigin(.5).setDepth(21);
+    const again=this.add.text(W/2,281,'Klik om opnieuw te spelen',{fontFamily:'system-ui',fontSize:'19px',color:'#fff0cf'}).setOrigin(.5).setDepth(21).setInteractive({useHandCursor:true});
+    again.on('pointerdown',()=>this.scene.restart());
   }
 
-  update(_time, delta) {
+  update(_time,delta){
     const dt=Math.min(delta/1000,.05);
     if(!this.ended){
       this.elapsed+=dt;
-      this.energy.blue=clamp(this.energy.blue+dt/2.5,0,10);
-      this.energy.red=clamp(this.energy.red+dt/2.5,0,10);
+      const regeneration=this.elapsed>180?1.6:2.7;
+      for(const side of ['blue','red'])this.energy[side]=clamp(this.energy[side]+dt/regeneration,0,10);
       this.enemyClock-=dt;
       if(this.enemyClock<=0){
-        const playable=CARDS.map((c,i)=>({c,i})).filter(x=>x.c.cost<=this.energy.red);
-        if(playable.length){
-          const pick=Phaser.Utils.Array.GetRandom(playable);
-          this.spawn('red',Phaser.Math.Between(0,2),pick.i,Phaser.Math.Between(102,312));
+        const affordable=CARDS.map((card,i)=>({card,i})).filter(c=>c.card.cost<=this.energy.red);
+        if(affordable.length){
+          const item=Phaser.Utils.Array.GetRandom(affordable);
+          this.spawn('red',Phaser.Math.Between(0,1),item.i,Phaser.Math.Between(580,735));
         }
-        this.enemyClock=Phaser.Math.FloatBetween(2.6,4.5);
+        this.enemyClock=Phaser.Math.FloatBetween(2.8,4.8);
       }
       for(const u of this.units){
         if(u.hp<=0)continue;
         u.cd-=dt;u.flash=Math.max(0,u.flash-dt);
-        const t=this.targetFor(u);
-        if(!t)continue;
-        const dist=Math.abs(u.y-t.y);
-        if(dist>u.card.range){
-          const direction=u.side==='blue'?-1:1;
-          const ahead=(t.y-u.y)*direction>0;
-          if(ahead)u.y+=direction*Math.min(u.card.speed*dt,dist-u.card.range);
-        }else if(u.cd<=0){
-          this.hit(t,u.card.damage,u);u.cd=u.card.rate;u.flash=.16;
-        }
+        const target=this.targetFor(u);if(!target)continue;
+        if(target.kind==='castle'&&this.getEnemyStructure(u)?.kind==='castle')u.merged=true;
+        const d=distance(u,target);
+        if(d>u.card.range)this.moveToward(u,target,dt);
+        else if(u.cd<=0){this.hit(u,target);u.cd=u.card.rate;}
       }
       for(const s of this.structures){
         if(s.hp<=0)continue;
-        const targets=this.units.filter(u=>u.side!==s.side && u.hp>0 && (s.kind==='nexus'||u.lane===s.lane) && Math.abs(u.y-s.y)<145);
-        const target=targets.sort((a,b)=>Math.abs(a.y-s.y)-Math.abs(b.y-s.y))[0];
-        s.cd=(s.cd??0)-dt;
-        if(target&&s.cd<=0){target.hp=Math.max(0,target.hp-32);s.cd=1.1;this.effects.push({x:LANES[s.lane],y:s.y,tx:LANES[target.lane],ty:target.y,life:.18,color:s.side==='blue'?0x87d8ff:0xff897c});}
+        s.cd-=dt;
+        const enemies=this.units.filter(u=>u.side!==s.side&&u.hp>0&&
+          (s.kind==='castle'||s.lane===u.lane)&&distance(s,u)<160)
+          .sort((a,b)=>distance(a,s)-distance(b,s));
+        if(enemies.length&&s.cd<=0){
+          enemies[0].hp=Math.max(0,enemies[0].hp-32);
+          this.effects.push({x:s.x,y:s.y-30,tx:enemies[0].x,ty:enemies[0].y-10,life:.18,max:.18,color:s.side==='blue'?0x89daff:0xffa197});
+          s.cd=1.05;
+        }
       }
       this.units=this.units.filter(u=>u.hp>0);
       if(this.elapsed>=240){
-        const blue=this.structures.filter(s=>s.side==='blue').reduce((n,s)=>n+s.hp/s.max,0);
-        const red=this.structures.filter(s=>s.side==='red').reduce((n,s)=>n+s.hp/s.max,0);
-        this.finish(blue>=red?'blue':'red');
+        const score=side=>this.structures.filter(s=>s.side===side).reduce((a,s)=>a+s.hp/s.max,0);
+        this.finish(score('blue')>=score('red')?'blue':'red');
       }
     }
     this.effects=this.effects.filter(e=>(e.life-=dt)>0);
-    this.drawActors();
-    this.drawHud();
+    this.drawGame();
   }
 
-  drawActors(){
-    const g=this.actors;g.clear();
+  drawGame(){
+    const g=this.visuals;g.clear();
     for(const s of this.structures){
-      const x=LANES[s.lane], color=s.side==='blue'?0x397db1:0xb24f4b;
-      g.fillStyle(s.hp>0?0x182e31:0x494037,.45).fillEllipse(x+3,s.y+13,s.kind==='nexus'?72:47,21);
+      const col=s.side==='blue'?BLUE:RED;
+      const w=s.kind==='castle'?68:43,h=s.kind==='castle'?106:66;
+      g.fillStyle(0x283527,.35).fillEllipse(s.x+3,s.y+25,w+14,20);
       if(s.hp>0){
-        const size=s.kind==='nexus'?53:37;
-        g.fillStyle(0xbaa784).fillRoundedRect(x-size/2,s.y-size/2,size,size,6);
-        g.lineStyle(4,color).strokeRoundedRect(x-size/2,s.y-size/2,size,size,6);
-        g.fillStyle(color).fillCircle(x,s.y,size*.3);
-        g.fillStyle(0xf3dd9a).fillCircle(x,s.y,6);
-      }else{g.fillStyle(0x67645b).fillCircle(x,s.y,17);}
-      g.fillStyle(0x201c1a).fillRect(x-25,s.y-39,50,6);
-      g.fillStyle(s.side==='blue'?0x6ad4fa:0xf26f6b).fillRect(x-25,s.y-39,50*s.hp/s.max,6);
-    }
-    for(const u of this.units){
-      const x=LANES[u.lane],y=u.y,blue=u.side==='blue',c=u.card;
-      g.fillStyle(0x15221b,.5).fillEllipse(x+3,y+10,27,10);
-      g.fillStyle(u.flash>0?0xfff5b1:(blue?0x5daee1:0xe7775c)).fillCircle(x,y,15);
-      g.lineStyle(2,0x1a2730).strokeCircle(x,y,15);
-      if(c.kind==='melee'){
-        g.fillStyle(0xc9d2d5).fillCircle(x,y-5,8);
-        g.fillStyle(blue?0x2e6cae:0xa94339).fillRoundedRect(x-15,y-1,12,15,3);
-        g.lineStyle(3,0xd9d9d2).lineBetween(x+9,y,x+18,y+(blue?-12:12));
-      } else if(c.kind==='ranged'){
-        g.fillStyle(0xbca57b).fillCircle(x,y-5,7);
-        g.lineStyle(3,0xd9aa67); g.arc(x+10,y,9,-1.2,1.2,false);g.strokePath();
+        g.fillStyle(0xa9a18c).fillRoundedRect(s.x-w/2,s.y-h/2,w,h,5);
+        g.lineStyle(4,0xf3e0b6).strokeRoundedRect(s.x-w/2,s.y-h/2,w,h,5);
+        g.fillStyle(col).fillRoundedRect(s.x-w/2+5,s.y-h/2+7,w-10,24,3);
+        g.fillStyle(0x4e4539).fillRoundedRect(s.x-9,s.y+7,18,h/2-15,8);
+        g.fillStyle(0xe1b768).fillCircle(s.x,s.y-8,7);
+        if(s.kind==='castle'){
+          for(let i=-1;i<=1;i++){
+            g.fillStyle(0xb9aa8a).fillRect(s.x+i*21-9,s.y-h/2-12,17,15);
+          }
+        }
       } else {
-        g.fillStyle(0x4e5154).fillRoundedRect(x-13,y-8,26,20,4);
-        g.lineStyle(8,0xa68a53).lineBetween(x,y,x,y+(blue?-24:24));
-        g.fillStyle(0x22232c).fillCircle(x-12,y+8,6).fillCircle(x+12,y+8,6);
+        g.fillStyle(0x6e6254).fillEllipse(s.x,s.y+15,w,26);
       }
-      g.fillStyle(0x1b201b).fillRect(x-17,y-29,34,4);
-      g.fillStyle(blue?0x59d4f2:0xf67b74).fillRect(x-17,y-29,34*u.hp/u.max,4);
+      g.fillStyle(0x262724).fillRect(s.x-25,s.y-h/2-25,50,7);
+      g.fillStyle(col).fillRect(s.x-25,s.y-h/2-25,50*Math.max(0,s.hp/s.max),7);
+    }
+    const units=[...this.units].sort((a,b)=>a.y-b.y);
+    for(const u of units){
+      const c=u.card,dir=u.side==='blue'?1:-1;
+      const sideColor=u.side==='blue'?BLUE:RED;
+      g.fillStyle(0x253827,.45).fillEllipse(u.x,u.y+14,c.type==='cannon'?47:34,10);
+      if(c.type==='cannon'){
+        g.fillStyle(0x6a6051).fillRoundedRect(u.x-21,u.y-8,44,20,4);
+        g.fillStyle(0x2d3336).fillCircle(u.x-13,u.y+13,10).fillCircle(u.x+13,u.y+13,10);
+        g.lineStyle(9,0xc5a056).lineBetween(u.x,u.y-3,u.x+dir*30,u.y-10);
+        g.fillStyle(sideColor).fillCircle(u.x-dir*15,u.y-13,9);
+      } else {
+        // Temporary big side-view silhouettes, replace with pixel spritesheets later.
+        g.fillStyle(sideColor).fillRoundedRect(u.x-13,u.y-18,26,30,8);
+        g.fillStyle(0xdcc39a).fillCircle(u.x,u.y-27,12);
+        g.fillStyle(c.type==='archer'?0x668b4d:0xc1c5cd).fillEllipse(u.x,u.y-34,26,13);
+        g.lineStyle(5,0x544539).lineBetween(u.x-8,u.y+10,u.x-10,u.y+18);
+        g.lineBetween(u.x+8,u.y+10,u.x+11,u.y+18);
+        if(c.type==='melee'){
+          g.fillStyle(0xb6a577).fillRoundedRect(u.x+dir*14-8,u.y-19,12,26,3);
+          g.lineStyle(4,0xe4dfc9).lineBetween(u.x-dir*11,u.y-14,u.x-dir*22,u.y-30);
+        }else{
+          g.lineStyle(3,0xb99154);
+          g.beginPath();g.arc(u.x+dir*16,u.y-13,15,-1.2,1.2,false);g.strokePath();
+        }
+      }
+      if(u.flash>0){g.lineStyle(3,0xffd37c).strokeCircle(u.x+dir*16,u.y-18,17);}
+      g.fillStyle(0x292929).fillRect(u.x-19,u.y-51,38,6);
+      g.fillStyle(sideColor).fillRect(u.x-19,u.y-51,38*(u.hp/u.max),6);
     }
     for(const e of this.effects){
-      g.lineStyle(e.life>0.1?3:2,e.color,Math.min(1,e.life*4));
+      g.lineStyle(e.color===0xffa85e?6:3,e.color,Math.min(1,e.life/e.max));
       g.lineBetween(e.x,e.y,e.tx,e.ty);
       g.fillStyle(e.color).fillCircle(e.tx,e.ty,5);
     }
-  }
-
-  drawHud(){
-    const g=this.hud;g.clear();
-    g.fillStyle(0x16251f).fillRect(0,0,W,55).fillRect(0,684,W,166);
-    g.lineStyle(3,0xbfa36b).lineBetween(0,684,W,684);
-    g.fillStyle(0xb39ee4).fillRoundedRect(16,711,Math.round(this.energy.blue/10*508),15,5);
-    g.lineStyle(2,0xd0b8fa).strokeRoundedRect(16,711,508,15,5);
-    for(let i=0;i<3;i++){
-      const x=18+i*174;
-      g.fillStyle(i===this.selected?0x716044:0x37433b).fillRoundedRect(x,737,155,101,9);
-      g.lineStyle(i===this.selected?4:2,i===this.selected?0xf2d28c:0x6a7564).strokeRoundedRect(x,737,155,101,9);
-      if(this.energy.blue<CARDS[i].cost)g.fillStyle(0x090b0b,.45).fillRoundedRect(x,737,155,101,9);
+    const ui=this.ui;ui.clear();
+    ui.fillStyle(0x1d2b2b).fillRect(0,FIELD_BOTTOM,W,H-FIELD_BOTTOM);
+    ui.lineStyle(3,0xc9a96a).lineBetween(0,FIELD_BOTTOM,W,FIELD_BOTTOM);
+    ui.fillStyle(0x4d3c61).fillRoundedRect(18,493,924,13,5);
+    ui.fillStyle(0xc58bed).fillRoundedRect(18,493,924*this.energy.blue/10,13,5);
+    for(let i=0;i<CARDS.length;i++){
+      const x=this.buttons[i].x;
+      ui.fillStyle(i===this.selected?0x786344:0x3a4844).fillRoundedRect(x-138,513,276,79,10);
+      ui.lineStyle(i===this.selected?4:2,i===this.selected?0xffdf91:0x7b886f).strokeRoundedRect(x-138,513,276,79,10);
+      if(this.energy.blue<CARDS[i].cost)ui.fillStyle(0x000000,.38).fillRoundedRect(x-138,513,276,79,10);
     }
-    const t=Math.max(0,240-this.elapsed);
-    this.statusText.setText('HISTORICAL ROYALE   •   '+Math.floor(t/60)+':'+String(Math.floor(t%60)).padStart(2,'0')+'   •   Energie '+Math.floor(this.energy.blue)+'/10');
+    const remaining=Math.max(0,240-this.elapsed);
+    this.header.setText('HISTORICAL ROYALE   •   '+Math.floor(remaining/60)+':'+String(Math.floor(remaining%60)).padStart(2,'0')+'   •   Energie '+Math.floor(this.energy.blue)+'/10');
   }
 }
 
 new Phaser.Game({
-  type:Phaser.AUTO, parent:'game', width:W,height:H,
-  backgroundColor:'#304b34',
+  type:Phaser.AUTO,parent:'game',width:W,height:H,
+  backgroundColor:'#355b42',
   scale:{mode:Phaser.Scale.FIT,autoCenter:Phaser.Scale.CENTER_BOTH},
   render:{pixelArt:true,antialias:false},
   scene:[Battle]
