@@ -10,6 +10,7 @@ import os, sys
 sys.path.insert(0, os.path.dirname(__file__))
 from units import build_units
 from world import build_world
+from cards import build_cards
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 SRC = os.path.join(ROOT, 'art', 'source') + '/'
@@ -17,5 +18,6 @@ OUT = os.path.join(ROOT, 'public', 'assets', 'art')
 os.makedirs(OUT, exist_ok=True)
 build_units(SRC, OUT, os.path.join(ROOT, 'src', 'art', 'units.json'))
 build_world(SRC, OUT, os.path.join(ROOT, 'src', 'art', 'world.json'))
+build_cards(SRC, OUT, os.path.join(ROOT, 'src', 'art', 'cards.json'))
 for f in sorted(os.listdir(OUT)):
     print(f'{f:24s} {os.path.getsize(os.path.join(OUT, f)) // 1024:5d} kB')

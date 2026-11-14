@@ -10,7 +10,7 @@ Nieuwe kaarten zijn vrij combineerbaar met de oorspronkelijke drie. Er zijn geen
 | Musketier | 4 | 150 bereik, veel schade per schot, maar 2,8 sec herladen |
 
 **Fase 1 (deze PR):** gevechtsregels, AI-keuzes, inzetbaar via tijdelijke compacte selectors, simpele silhouettes.
-**Fase 2:** geschilderde sprites/animaties voor de vier eenheden, aansluiten op `src/art/units.json`.
-**Fase 3:** definitieve kaartportretten en styling van de onderste balk.
+**Fase 2 (v0.9, klaar):** geschilderde sprites/animaties voor de vier eenheden in `src/art/units.json`.
+**Fase 3 (v0.9, klaar):** geschilderde kaarten in de onderste balk (`src/art/cards.json`).
 
 Spelmechanische waarden zijn eerste balansvoorstellen. Bestaande drie kaarten en damage-/targeting-regels blijven ongemoeid.

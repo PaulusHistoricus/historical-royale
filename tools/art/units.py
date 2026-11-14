@@ -15,6 +15,31 @@ def cut(a,fg,box):
     # alleen het grootste samenhangende stuk + alles wat dichtbij hoort (pijl, vonken)
     return rgb.astype(np.uint8), m
 
+def load_rgba(path, cutoff=30):
+    """Bron met echte transparantie: alfa onder `cutoff` (waas) telt als leeg."""
+    A=np.array(Image.open(path).convert('RGBA')).astype(np.int16)
+    al=A[...,3].astype(np.float32)
+    al=np.where(al<cutoff,0,np.minimum(255,al*255/250))
+    fg=al>0
+    lab,n=ndi.label(fg)
+    if n:
+        sizes=ndi.sum(fg,lab,range(1,n+1))
+        fg=np.isin(lab,[i+1 for i,s in enumerate(sizes) if s>=60])
+    return A[...,:3], fg, (al*fg).astype(np.uint8)
+
+def rgba_unit(path, anims, splits={}):
+    """Eén sheet met één rij per animatie (volgorde `anims`). splits: {(rij, frame): [x, ...]}."""
+    rgb,fg,al=load_rgba(path)
+    rows=[r for r in bands(fg.sum(1),2,2) if r[1]-r[0]>40]
+    assert len(rows)==len(anims), (path, rows)
+    G={}
+    for ri,(name,row) in enumerate(zip(anims,rows)):
+        parts=[]
+        for fi,b in enumerate(frames_in_row(fg,row[0],row[1],0)):
+            parts += split_components(fg,b,splits[(ri,fi)]) if (ri,fi) in splits else [(b,fg[b[1]:b[3],b[0]:b[2]])]
+        G[name]=[(rgb[y0:y1,x0:x1].astype(np.uint8), m, (al[y0:y1,x0:x1]*m).astype(np.uint8)) for (x0,y0,x1,y1),m in parts]
+    return G
+
 def anchor_of(m):
     h=m.shape[0]; ys,xs=np.where(m[int(h*0.78):])
     return float(xs.mean()), h
@@ -38,23 +63,27 @@ def hue_shift(rgb, m, src, dst, minsat=.38, width=22):
 
 def build(OUT, name, groups, target_h, ref_group, variants):
     """groups: dict anim -> list of (rgb, mask)"""
-    ref_rgb,ref_m=groups[ref_group][0]
+    ref_m=groups[ref_group][0][1]
     scale=target_h/ref_m.shape[0]
     items=[]
     for anim,frames in groups.items():
-        for rgb,m in frames:
+        for fr in frames:
+            rgb,m=fr[0],fr[1]
             ax,h=anchor_of(m)
-            items.append((anim,rgb,m,ax))
-    left=max(ax for _,_,_,ax in items); right=max(m.shape[1]-ax for _,_,m,ax in items)
-    height=max(m.shape[0] for _,_,m,_ in items)
+            items.append((anim,rgb,m,ax,fr[2] if len(fr)>2 else None))
+    left=max(it[3] for it in items); right=max(it[2].shape[1]-it[3] for it in items)
+    height=max(it[2].shape[0] for it in items)
     cw=int(np.ceil((left+right)*scale))+4; ch=int(np.ceil(height*scale))+4
     ax_cell=int(round(left*scale))+2
     anims={}; n=0
     cols=min(len(items),10); rows=-(-len(items)//cols)  # max 10 kolommen: textuur blijft < 2048 px breed
     sheets={v:Image.new('RGBA',(cw*cols,ch*rows),(0,0,0,0)) for v in variants}
-    for anim,rgb,m,ax in items:
+    for anim,rgb,m,ax,src_alpha in items:
         for v,fn in variants.items():
-            col,alpha=matte(fn(rgb,m),m)
+            if src_alpha is not None:   # bron heeft echte transparantie
+                col,alpha=fn(rgb,m),src_alpha
+            else:
+                col,alpha=matte(fn(rgb,m),m)
             im=Image.fromarray(np.dstack([col,alpha]),'RGBA')
             # premultiplied resize voorkomt witte randen
             w2=max(1,int(round(m.shape[1]*scale))); h2=max(1,int(round(m.shape[0]*scale)))
@@ -100,5 +129,16 @@ def build_units(SRC, OUT, MANIFEST):
        'death':[cut(a4,f4,c4[-1])]}
     G['hit']=[G['idle'][0]]
     manifest['cannon']=build(OUT,'cannon',G,100,'walk',{'-red':ident,'-blue':toblue})
+    # Nieuwe eenheden (bronnen met transparantie; één rij per animatie)
+    ROWS=['idle','walk','attack','hit','death']
+    toredC=lambda rgb,m: hue_shift(rgb,m,222,358,minsat=.30,width=26)
+    G=rgba_unit(SRC+'ruiter.png',ROWS,{(2,3):[940,1195]})
+    manifest['cavalry']=build(OUT,'cavalry',G,136,'idle',{'-red':ident,'-blue':toblue})
+    G=rgba_unit(SRC+'berserker.png',ROWS,{(2,3):[952]})
+    manifest['berserker']=build(OUT,'berserker',G,112,'idle',{'-red':ident,'-blue':toblue})
+    G=rgba_unit(SRC+'ruiterboogschutter.png',ROWS,{(4,2):[651]})
+    manifest['horse_archer']=build(OUT,'horse_archer',G,140,'idle',{'':ident})
+    G=rgba_unit(SRC+'musketier.png',ROWS,{(1,1):[376],(2,2):[552,722],(4,0):[176,340]})
+    manifest['musket']=build(OUT,'musket',G,114,'idle',{'-blue':ident,'-red':toredC})
     json.dump(manifest,open(MANIFEST,'w'),indent=1)
     return manifest

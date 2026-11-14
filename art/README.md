@@ -26,7 +26,24 @@ python3 tools/art/build.py
 | `arena-kanon-a.png` | Kanon: lopen 4, vuren 4 (onderste rij) |
 | `arena-kanon-b.png` | Kanon: kapot (laatste frame onderste rij) |
 | `arena-kanon-c.png` | Niet gebruikt (alternatieve arena/kanon) |
+| `ruiter.png` | Romeinse ruiter: rust 4, lopen 6, aanvallen 6, geraakt 4, sterven 6 |
+| `berserker.png` | Viking berserker: rust 5, lopen 8, aanvallen 6, geraakt 4, sterven 6 |
+| `ruiterboogschutter.png` | Mongoolse ruiterboogschutter: rust 4, lopen 6, schieten 6, geraakt 4, sterven 6 |
+| `musketier.png` | Musketier: rust 4, lopen 8, schieten 8, geraakt 4, sterven 7 |
+| `kaarten.png` | De zeven kaarten onderin, in de volgorde van `CARDS` |
 | `torens-kastelen.png` | Schadestadia toren en kasteel (bovenste helft) en de arena (onderste helft) |
+
+## Bronnen met echte transparantie
+
+De vier nieuwe eenheden zijn PNG's met een alfakanaal. Die gaan via `rgba_unit()` in `units.py`: één rij per animatie
+(rust, lopen, aanvallen, geraakt, sterven). Waar frames elkaar raken staan knippunten als `{(rij, frame): [x, ...]}`;
+kleine uitsteeksels (een lans, een pijl) blijven bij het frame waar ze bij horen. Dit formaat heeft de voorkeur voor nieuwe art.
+
+## Kaarten
+
+`cards.py` snijdt de kaarten uit `kaarten.png` en zoekt het paarse energiejuweel op. Het spel tekent daar een eigen
+juweel overheen met de **echte** kosten uit `config.js`, zodat kaart en spel nooit uit elkaar lopen.
+Een nieuwe kaart: voeg hem toe aan `kaarten.png` (zelfde stijl, juweel linksboven) en aan `ORDER` in `cards.py`.
 
 ## Tips voor nieuwe art
 

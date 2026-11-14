@@ -40,6 +40,7 @@ Zo werkt de weergave nu (v0.8):
 - Pijlen, kanonskogels en vonken zijn puur visueel (`this.projectiles`, `this.sparks`); de schade is al in de simulatie toegepast.
 - Torens en kastelen tonen 5 schadestadia (frame 0–4) op basis van `hp / max`.
 - Animatienamen per eenheid staan in `src/art/units.json` (`idle`, `walk`, `attack`, `hit`, `death`). Alle art kijkt naar rechts; `setFlipX` draait rood om.
+- De kaartenbalk gebruikt `public/assets/art/cards.png`; het energiejuweel en de naam worden er in `drawHud` overheen getekend met de waarden uit `CARDS`.
 - Het canvas rendert op 2× (`ZOOM`); alle coördinaten blijven wereldcoördinaten (960 × 432). Gebruik `pointer.worldX/worldY`.
 
 Nieuwe art toevoegen: zie `art/README.md`. Kort: zet het bronbestand in `art/source/`, voeg de uitsnede toe in `tools/art/units.py` of `world.py`, draai `python3 tools/art/build.py`, en controleer in de browser.
