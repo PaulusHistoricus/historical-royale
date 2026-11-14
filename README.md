@@ -1,4 +1,4 @@
-# Historical Royale — prototype 0.2
+# Historical Royale — prototype
 
 Een historische, kaartgestuurde **2D lane-battler** met een **liggend zijaanzicht**, geïnspireerd op de leesbaarheid van Age of War en de snelle kaartgevechten van Clash Royale.
 
@@ -11,9 +11,9 @@ npm install
 npm run dev
 ```
 
-Open de lokale URL van Vite. Voor een productiebuild: `npm run build`.
+Open de lokale URL van Vite. Voor een productiebuild: `npm run build`. Tests: `npm test`.
 
-## Prototype 0.2
+## Wat er nu in zit
 
 - **Landscape-arena met twee horizontale banen**: je kasteel links, vijandelijk kasteel rechts.
 - **Eén toren per baan per speler**. Na vernietiging van de vijandelijke toren marcheren eenheden van die baan richting het gezamenlijke vijandelijke kasteel.
@@ -33,6 +33,13 @@ De AI, gevechtsbalans en routekeuze zijn voorlopig. Bij de eerste praktijktest m
 ## Techniek
 
 Phaser 3, JavaScript en Vite. De simulatie draait voorlopig lokaal in de browser. Voor eerlijke online PvP komt later een server-authoritative simulatie.
+
+- `src/sim/` — de volledige gevechtssimulatie, zonder Phaser, deterministisch en getest (`tests/`).
+- `src/main.js` — alleen weergave en invoer.
+- De kop in het spel toont versie en commit van de build; de game laadt zichzelf opnieuw als er een nieuwere build online staat.
+- Voeg `?debug=1` aan de URL toe voor live gevechtswaarden per eenheid.
+
+Werkafspraken voor AI-assistenten staan in [AGENTS.md](AGENTS.md).
 
 ## Volgende stappen
 
