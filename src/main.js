@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import './style.css';
 import { W, H, LANES, FIELD_BOTTOM, CARDS, DEPLOY_ZONE, MATCH_SECONDS, ENERGY_MAX } from './sim/config.js';
 import * as sim from './sim/battle.js';
+import { createHand, playFromHand, HAND_SIZE } from './sim/hand.js';
 import UNIT_ART from './art/units.json';
 import WORLD_ART from './art/world.json';
 import CARD_ART from './art/cards.json';
@@ -78,7 +79,8 @@ class Battle extends Phaser.Scene {
     this.createAnimations();
     this.state = createBattle();
     this.accumulator = 0;
-    this.selected = 0;
+    this.selected = 0; // geselecteerde positie in de hand, niet de kaartindex
+    this.hand = createHand(CARDS.length, this.state.rng);
     this.views = new Map();        // eenheid-id -> { sprite, type, lockUntil, flashUntil }
     this.projectiles = [];         // puur visueel
     this.sparks = [];
@@ -110,9 +112,14 @@ class Battle extends Phaser.Scene {
       if (this.state.ended || y >= FIELD_BOTTOM || y < 40 || x < ZONE.min || x > ZONE.max) return;
       const lane = Math.abs(y - LANES[0]) <= Math.abs(y - LANES[1]) ? 0 : 1;
       if (Math.abs(y - LANES[lane]) > 48) return;
-      this.message.setText(deploy(this.state, 'blue', lane, this.selected, x)
-        ? 'Verdedig beide banen en breek door naar het kasteel!'
-        : 'Niet genoeg energie voor deze kaart');
+      const cardIndex = this.hand.slots[this.selected];
+      if (deploy(this.state, 'blue', lane, cardIndex, x)) {
+        playFromHand(this.hand, this.selected);
+        this.refreshCardSlot(this.selected);
+        this.message.setText('Eenheid ingezet — nieuwe kaart getrokken!');
+      } else {
+        this.message.setText('Niet genoeg energie voor deze kaart');
+      }
     });
     this.input.keyboard?.on('keydown-R', () => this.scene.restart());
     ensureLatestBuild().then(status => {
@@ -128,28 +135,45 @@ class Battle extends Phaser.Scene {
     }
   }
 
-  // Kaartenbalk met de geschilderde kaarten (art/source/kaarten.png). Het energiejuweel
-  // wordt eroverheen getekend met de echte kosten uit config.js.
+  // De speler ziet vier kaarten. Na succesvol inzetten vult de geschudde
+  // trekstapel precies dat vak aan. Illustraties/energiekosten komen uit de
+  // bestaande art en CARDS-config; dit verandert niets aan de gevechtsregels.
   createCards() {
-    const scale = 1 / ZOOM, cellW = CARD_ART.frameWidth * scale, cardH = CARD_ART.frameHeight * scale;
-    const gap = 6, top = H - cardH - 4, total = CARDS.length * cellW + (CARDS.length - 1) * gap;
+    const scale = 1 / ZOOM;
+    const cellW = CARD_ART.frameWidth * scale, cardH = CARD_ART.frameHeight * scale;
+    const gap = 15, top = H - cardH - 4;
+    const total = HAND_SIZE * cellW + (HAND_SIZE - 1) * gap;
     this.cardGems = this.add.graphics().setDepth(1160);
-    this.cards = CARDS.map((card, i) => {
-      const art = CARD_ART.cards[card.type];
-      const x = W / 2 - total / 2 + cellW / 2 + i * (cellW + gap);
-      const image = this.add.image(x, top, 'cards', art.frame).setOrigin(0.5, 0).setScale(scale).setDepth(1150);
-      const zone = this.add.zone(x, top + cardH / 2, art.width * scale, cardH).setInteractive({ useHandCursor: true }).setDepth(1300);
+    this.cards = Array.from({ length: HAND_SIZE }, (_, slot) => {
+      const x = W / 2 - total / 2 + cellW / 2 + slot * (cellW + gap);
+      const image = this.add.image(x, top, 'cards', 0).setOrigin(0.5, 0).setScale(scale).setDepth(1150);
+      const zone = this.add.zone(x, top + cardH / 2, cellW, cardH)
+        .setInteractive({ useHandCursor: true }).setDepth(1300);
       zone.on('pointerdown', () => {
         if (this.state.ended) return;
-        this.selected = i;
-        this.message.setText(card.name + ' gekozen — tik op een baan in het blauwe vak');
+        this.selected = slot;
+        this.message.setText(CARDS[this.hand.slots[slot]].name + ' gekozen — tik op een blauwe baan');
       });
-      const left = x - cellW / 2;
-      const gem = { x: left + art.gemX * scale, y: top + art.gemY * scale, r: art.gemR * scale + 1.5 };
-      const cost = text(this, gem.x, gem.y, String(card.cost), 14).setOrigin(0.5).setDepth(1170);
-      const label = text(this, x, top + cardH - 9, CARD_LABEL[card.type] ?? card.name, 8).setOrigin(0.5).setDepth(1170);
-      return { x, top, w: art.width * scale, h: cardH, image, gem, cost, label };
+      const cost = text(this, x, top + 12, '', 14).setOrigin(0.5).setDepth(1170);
+      const label = text(this, x, top + cardH - 9, '', 8).setOrigin(0.5).setDepth(1170);
+      return { x, top, w: cellW, h: cardH, image, gem: null, cost, label };
     });
+    this.cards.forEach((_, slot) => this.refreshCardSlot(slot));
+  }
+
+  refreshCardSlot(slot) {
+    const view = this.cards[slot];
+    const card = CARDS[this.hand.slots[slot]];
+    const art = CARD_ART.cards[card.type];
+    const scale = 1 / ZOOM;
+    view.image.setFrame(art.frame);
+    view.gem = {
+      x: view.x - view.w / 2 + art.gemX * scale,
+      y: view.top + art.gemY * scale,
+      r: art.gemR * scale + 1.5,
+    };
+    view.cost.setText(String(card.cost)).setX(view.gem.x);
+    view.label.setText(CARD_LABEL[card.type] ?? card.name);
   }
 
   // Vertaalt gebeurtenissen uit de simulatie naar animaties en effecten.
@@ -347,7 +371,7 @@ class Battle extends Phaser.Scene {
     const g = this.cardGems;
     g.clear();
     this.cards.forEach((c, i) => {
-      const sel = i === this.selected, affordable = s.energy.blue >= CARDS[i].cost;
+      const sel = i === this.selected, affordable = s.energy.blue >= CARDS[this.hand.slots[i]].cost;
       const lift = sel ? -4 : 0;
       c.image.setY(c.top + lift).setTint(affordable ? 0xffffff : 0x6f6f6f);
       if (sel) {
