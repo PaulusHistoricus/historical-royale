@@ -111,3 +111,31 @@ def matte(rgb, m, band=2):
     un=np.where(al>0.05,(rgb-255*(1-al))/np.maximum(al,0.05),rgb)
     out=np.where(edge[...,None],un,rgb)
     return out.clip(0,255).astype(np.uint8),(alpha*255).astype(np.uint8)
+
+
+def split_components(fg, box, xs):
+    """Splitst een vak bij x-posities, maar houdt elke losse vorm heel: een vorm hoort
+    bij het frame waar zijn zwaartepunt ligt (bv. een lans die over de grens steekt)."""
+    x0,y0,x1,y1=box
+    sub=fg[y0:y1,x0:x1]; lab,n=ndi.label(sub)
+    edges=[0]+[x-x0 for x in xs]+[x1-x0]
+    masks=[np.zeros_like(sub) for _ in range(len(edges)-1)]
+    if n:
+        cents=ndi.center_of_mass(sub,lab,range(1,n+1))
+        for i,(cy,cx) in enumerate(cents):
+            comp=(lab==i+1); cols=np.where(comp.any(0))[0]
+            segs=[j for j in range(len(edges)-1)
+                  if min(cols[-1]+1,edges[j+1])-max(cols[0],edges[j])>25]
+            if len(segs)>1:   # twee figuren raken elkaar echt: recht doorknippen
+                for j in range(len(edges)-1):
+                    part=comp.copy(); part[:,:edges[j]]=False; part[:,edges[j+1]:]=False
+                    masks[j]|=part
+            else:             # klein uitsteeksel: hoort bij frame van zijn zwaartepunt
+                k=max(j for j in range(len(edges)-1) if cx>=edges[j])
+                masks[k]|=comp
+    out=[]
+    for m in masks:
+        ys=np.where(m.any(1))[0]; xx=np.where(m.any(0))[0]
+        b=(x0+xx[0],y0+ys[0],x0+xx[-1]+1,y0+ys[-1]+1)
+        out.append((b,m[b[1]-y0:b[3]-y0,b[0]-x0:b[2]-x0]))
+    return out
