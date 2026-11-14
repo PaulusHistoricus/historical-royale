@@ -4,6 +4,8 @@ from scipy import ndimage as ndi
 
 def load(p): return np.array(Image.open(p).convert('RGB')).astype(np.int16)
 
+HOLE_MIN = 30   # bronpixels
+
 def fg_mask(a, bg='white', tol=28):
     """Voorgrond = alles wat niet via de rand verbonden is met achtergrondkleur."""
     if bg=='white':
@@ -17,6 +19,14 @@ def fg_mask(a, bg='white', tol=28):
     lab,n=ndi.label(bgish)
     edge=set(np.unique(np.concatenate([lab[0],lab[-1],lab[:,0],lab[:,-1]])))-{0}
     bgm=np.isin(lab,list(edge))
+    if bg=='white':
+        # Ingesloten witte vlakken (binnen een boog, tussen benen) zijn ook achtergrond.
+        # Kleine stukjes (oogwit, glimlicht) blijven staan.
+        holes=(mn>=234)&(mx-mn<16)&~bgm
+        hl,hn=ndi.label(holes)
+        if hn:
+            sizes=ndi.sum(holes,hl,range(1,hn+1))
+            bgm|=np.isin(hl,[i+1 for i,s in enumerate(sizes) if s>=HOLE_MIN])
     fg=~bgm
     fg=ndi.binary_opening(fg,iterations=1)
     lab,n=ndi.label(fg)
@@ -87,3 +97,17 @@ def split_at(fg, box, xs):
         mm=fg[y0:y1,edges[i]:edges[i+1]]; ys=np.where(mm.any(1))[0]; xx=np.where(mm.any(0))[0]
         out.append((edges[i]+xx[0],y0+ys[0],edges[i]+xx[-1]+1,y0+ys[-1]+1))
     return out
+
+
+def matte(rgb, m, band=2):
+    """Zachte rand: alpha uit 'hoe wit' een randpixel is, en kleur ontmengen van wit."""
+    rgb=rgb.astype(np.float32); alpha=m.astype(np.float32)
+    inner=ndi.binary_erosion(m,iterations=band)
+    edge=m&~inner
+    a=np.clip((255-rgb.min(2))/70.0,0.0,1.0)
+    alpha[edge]=np.maximum(a[edge],0.0)
+    # transparante gaten tussen randpixels niet laten 'uitlopen'
+    al=alpha[...,None]
+    un=np.where(al>0.05,(rgb-255*(1-al))/np.maximum(al,0.05),rgb)
+    out=np.where(edge[...,None],un,rgb)
+    return out.clip(0,255).astype(np.uint8),(alpha*255).astype(np.uint8)

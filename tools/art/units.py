@@ -54,10 +54,7 @@ def build(OUT, name, groups, target_h, ref_group, variants):
     sheets={v:Image.new('RGBA',(cw*cols,ch*rows),(0,0,0,0)) for v in variants}
     for anim,rgb,m,ax in items:
         for v,fn in variants.items():
-            col=fn(rgb,m)
-            alpha=(m*255).astype(np.uint8)
-            edge=m & ~ndi.binary_erosion(m,iterations=1)
-            alpha[edge]=150
+            col,alpha=matte(fn(rgb,m),m)
             im=Image.fromarray(np.dstack([col,alpha]),'RGBA')
             # premultiplied resize voorkomt witte randen
             w2=max(1,int(round(m.shape[1]*scale))); h2=max(1,int(round(m.shape[0]*scale)))
