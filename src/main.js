@@ -12,7 +12,8 @@ const CARDS = [
 ];
 const clamp = (n,a,b) => Math.max(a, Math.min(b,n));
 const distance = (a,b) => Math.hypot(a.x-b.x,a.y-b.y);
-const enemyOf = side => side === 'blue' ? 'red' : 'blue';
+const DETECTION_RANGE = 205;
+const CONTACT_RANGE = 43;
 
 class Battle extends Phaser.Scene {
   constructor(){super('battle');}
@@ -96,7 +97,7 @@ class Battle extends Phaser.Scene {
     this.energy[side]-=card.cost;
     const pos=side==='blue'?clamp(x,205,420):clamp(x,540,755);
     const offset=(this.unitId++%3-1)*10;
-    this.units.push({id:this.unitId,side,lane,x:pos,y:LANES[lane]+offset,hp:card.hp,max:card.hp,card,cd:0,flash:0,merged:false});
+    this.units.push({id:this.unitId,side,lane,x:pos,y:LANES[lane]+offset,hp:card.hp,max:card.hp,card,cd:0,flash:0,merged:false,facing:side==='blue'?1:-1});
     return true;
   }
 
@@ -106,15 +107,17 @@ class Battle extends Phaser.Scene {
   }
 
   targetFor(u){
-    const direction=u.side==='blue'?1:-1;
-    // Before the lane tower falls, only fight inside your lane. Afterward
-    // a shared castle approach allows both lanes to reinforce one another.
+    // Threats are detected in BOTH directions, even behind a defender.
+    // Prioritize enemies attacking nearby friendly structures.
     const candidates=this.units.filter(e=>
-      e.side!==u.side && e.hp>0 &&
+      e!==u && e.side!==u.side && e.hp>0 &&
       (e.lane===u.lane || (u.merged && e.merged)) &&
-      (e.x-u.x)*direction>-35 &&
-      distance(u,e)<190
-    ).sort((a,b)=>distance(u,a)-distance(u,b));
+      distance(u,e)<DETECTION_RANGE
+    ).sort((a,b)=>{
+      const defend=enemy=>this.structures.some(s=>s.side===u.side&&s.hp>0&&
+        (s.kind==='castle'||s.lane===u.lane)&&distance(s,enemy)<175);
+      return Number(defend(b))-Number(defend(a)) || distance(u,a)-distance(u,b);
+    });
     return candidates[0]??this.getEnemyStructure(u);
   }
 
@@ -123,7 +126,14 @@ class Battle extends Phaser.Scene {
     const len=Math.hypot(dx,dy);
     if(len<1)return;
     const step=Math.min(len,u.card.speed*dt);
-    u.x+=(dx/len)*step;u.y+=(dy/len)*step;
+    const nextX=u.x+(dx/len)*step;
+    const nextY=u.y+(dy/len)*step;
+    // Do not phase through an enemy: stop at contact and let targeting engage.
+    const blocker=this.units.find(e=>e!==u&&e.side!==u.side&&e.hp>0&&
+      (e.lane===u.lane||(u.merged&&e.merged))&&
+      Math.hypot(nextX-e.x,nextY-e.y)<CONTACT_RANGE);
+    if(blocker){u.facing=blocker.x>=u.x?1:-1;return;}
+    u.x=nextX;u.y=nextY;
   }
 
   hit(attacker,target){
@@ -149,7 +159,7 @@ class Battle extends Phaser.Scene {
     const dt=Math.min(delta/1000,.05);
     if(!this.ended){
       this.elapsed+=dt;
-      const regeneration=this.elapsed>180?1.6:2.7;
+      const regeneration=this.elapsed>180?0.8:1.35;
       for(const side of ['blue','red'])this.energy[side]=clamp(this.energy[side]+dt/regeneration,0,10);
       this.enemyClock-=dt;
       if(this.enemyClock<=0){
@@ -165,6 +175,7 @@ class Battle extends Phaser.Scene {
         u.cd-=dt;u.flash=Math.max(0,u.flash-dt);
         const target=this.targetFor(u);if(!target)continue;
         if(target.kind==='castle'&&this.getEnemyStructure(u)?.kind==='castle')u.merged=true;
+        u.facing=target.x>=u.x?1:-1;
         const d=distance(u,target);
         if(d>u.card.range)this.moveToward(u,target,dt);
         else if(u.cd<=0){this.hit(u,target);u.cd=u.card.rate;}
@@ -216,7 +227,7 @@ class Battle extends Phaser.Scene {
     }
     const units=[...this.units].sort((a,b)=>a.y-b.y);
     for(const u of units){
-      const c=u.card,dir=u.side==='blue'?1:-1;
+      const c=u.card,dir=u.facing;
       const sideColor=u.side==='blue'?BLUE:RED;
       g.fillStyle(0x253827,.45).fillEllipse(u.x,u.y+14,c.type==='cannon'?47:34,10);
       if(c.type==='cannon'){
