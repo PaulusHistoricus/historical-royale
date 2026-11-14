@@ -37,7 +37,7 @@ export const CARDS = [
   { name: 'Romeinse ruiter', type: 'cavalry', cost: 4, hp: 215, damage: 37, range: 15, speed: 110, rate: 1.0, radius: 18, chargeBonus: 39, chargeDistance: 65 },
   { name: 'Viking berserker', type: 'berserker', cost: 4, hp: 190, damage: 49, range: 14, speed: 66, rate: 0.85, radius: 14, rageMultiplier: 1.6 },
   { name: 'Mongoolse ruiterboogschutter', type: 'horse_archer', cost: 5, hp: 155, damage: 24, range: 125, speed: 88, rate: 0.9, radius: 17 },
-  { name: 'Musketier', type: 'musket', cost: 4, hp: 140, damage: 90, range: 150, speed: 39, rate: 2.8, radius: 13 },
+  { name: 'Musketier', type: 'musket', cost: 4, hp: 140, damage: 90, range: 124, speed: 39, rate: 2.8, radius: 13 },
 ];
 
 export const STRUCTURES = {
