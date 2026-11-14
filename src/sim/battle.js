@@ -76,6 +76,7 @@ export function addUnit(state, side, lane, cardIndex, x) {
     y: LANES[lane] + ((id - 1) % 3 - 1) * 10, // alleen decoratief, telt niet mee in gevechten
     hp: card.hp, max: card.hp, radius: card.radius, card,
     cd: 0, state: 'move', targetId: null,
+    distanceTravelled: 0, chargeUsed: false,
     facing: side === 'blue' ? 1 : -1,
   };
   state.units.push(unit);
@@ -228,11 +229,22 @@ export function step(state, dt) {
   }
 
   // 2. BEWEGEN
-  for (const m of moves) m.unit.x += m.dx;
+  for (const m of moves) {
+    m.unit.x += m.dx;
+    m.unit.distanceTravelled += Math.abs(m.dx);
+  }
 
   // 3. SCHADE
   for (const { attacker, target } of hits) {
-    const damage = attacker.card ? attacker.card.damage : STRUCTURES[attacker.kind].damage;
+    let damage = attacker.card ? attacker.card.damage : STRUCTURES[attacker.kind].damage;
+    if (attacker.card?.type === 'cavalry' && !attacker.chargeUsed &&
+        attacker.distanceTravelled >= attacker.card.chargeDistance) {
+      damage += attacker.card.chargeBonus;
+      attacker.chargeUsed = true;
+    }
+    if (attacker.card?.type === 'berserker' && attacker.hp <= attacker.max / 2) {
+      damage = Math.round(damage * attacker.card.rageMultiplier);
+    }
     const before = target.hp;
     target.hp = Math.max(0, target.hp - damage);
     state.events.push({
