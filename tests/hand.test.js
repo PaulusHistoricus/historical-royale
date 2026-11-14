@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createHand, playFromHand, HAND_SIZE } from '../src/sim/hand.js';
+import { createHand, playFromHand, nextCard, HAND_SIZE } from '../src/sim/hand.js';
 
 test('speler krijgt vier verschillende kaarten uit zeven', () => {
   const hand = createHand(7, () => 0.3);
@@ -27,10 +27,23 @@ test('alle zeven kaarten komen langs vóór reshuffle; geen lege vakken', () => 
     seen.add(result.next);
   }
   assert.equal(seen.size, 7);
-  assert.equal(hand.drawPile.length, 0);
+  // de stapel is meteen opnieuw geschud uit de drie gespeelde kaarten
+  assert.equal(hand.drawPile.length, 3);
+  assert.equal(hand.discard.length, 0);
   const result = playFromHand(hand, 3);
   assert.ok(result.next >= 0 && result.next < 7);
   assert.equal(hand.slots.length, 4);
+});
+
+test('de volgende kaart is altijd bekend en komt als eerste in de hand', () => {
+  const hand = createHand(7, () => 0.7);
+  for (let i = 0; i < 30; i++) {
+    const expected = nextCard(hand);
+    assert.ok(Number.isInteger(expected), `beurt ${i}: volgende kaart bekend`);
+    assert.equal(playFromHand(hand, i % 4).next, expected);
+    assert.equal(new Set(hand.slots).size, 4, 'geen dubbele kaarten in de hand');
+    assert.ok(!hand.slots.includes(nextCard(hand)), 'volgende kaart zit niet al in de hand');
+  }
 });
 
 test('ongeldig vak verandert de hand niet', () => {

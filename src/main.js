@@ -1,25 +1,38 @@
 import Phaser from 'phaser';
 import './style.css';
-import { W, H, LANES, FIELD_BOTTOM, CARDS, DEPLOY_ZONE, MATCH_SECONDS, ENERGY_MAX } from './sim/config.js';
+import { W, LANES, FIELD_BOTTOM, CARDS, DEPLOY_ZONE, MATCH_SECONDS, ENERGY_MAX } from './sim/config.js';
 import * as sim from './sim/battle.js';
 import { createHand, playFromHand, HAND_SIZE } from './sim/hand.js';
 import UNIT_ART from './art/units.json';
 import WORLD_ART from './art/world.json';
 import CARD_ART from './art/cards.json';
+import BAR_ART from './art/cardbar.json';
 import { VERSION_LABEL, ensureLatestBuild } from './version.js';
 const { createBattle, deploy, step, findById, gap } = sim;
 
 // Dit bestand bevat ALLEEN weergave en invoer. Alle spelregels (lopen, doelwit
-// kiezen, aanvallen, schade, AI, energie) staan in src/sim/ en worden getest in
-// tests/. Art wordt gemaakt met tools/art/build.py; zie art/README.md.
+// kiezen, aanvallen, schade, AI, energie, kaartenhand) staan in src/sim/ en
+// worden getest in tests/. Art wordt gemaakt met tools/art/build.py.
+//
+// SCHERMINDELING — zie layout(). Alles staat in wereldcoördinaten (960 breed):
+//   * speelveld: y = 0 .. FIELD_BOTTOM (310), altijd volledig zichtbaar;
+//   * kaartenbalk: begint bij BAR_OVERLAP (onder banen en kastelen, over de
+//     decoratieve onderrand van het veld) en schaalt mee met het scherm;
+//   * in portret een kopstrook boven het veld (negatieve y) voor tijd en tekst.
+// De camera zoomt dat geheel zo groot mogelijk in het canvas. Het canvas heeft
+// de grootte van het scherm x devicePixelRatio, dus alles blijft scherp.
 
-const ZOOM = 2;                    // canvas = 2x wereld, zodat art en tekst scherp blijven op telefoons
+const TEX = 2;                      // textures zijn gemaakt op 2x wereldresolutie
 const ART = import.meta.env.BASE_URL + 'assets/art/';
-const SIM_STEP = 1 / 60;           // vaste simulatiestap, onafhankelijk van de framerate
+const SIM_STEP = 1 / 60;            // vaste simulatiestap, onafhankelijk van de framerate
 const TEAM = { blue: 0x4f9be8, red: 0xe0513f };
 const ZONE = DEPLOY_ZONE.blue;
 const FONT = 'Georgia, "Times New Roman", serif';
 const DEBUG = new URLSearchParams(location.search).has('debug');
+const BAR_OVERLAP = 266;            // bovenrand kaartenbalk; banen en kastelen eindigen erboven
+const PORTRAIT_TOP = 120;           // kopstrook in portret
+const BAR_MAX_LANDSCAPE = 0.33;     // balkschaal liggend/desktop: balk ≈ 30% van de hoogte, veld ≈ 70%
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // Waar voeten en gebouwen in de arena-art staan (wereldpixels).
 const footY = u => LANES[u.lane] + 8 + (u.y - LANES[u.lane]) * 0.6;
@@ -34,12 +47,18 @@ const unitTexture = (type, side) => {
   const list = UNIT_ART[type].textures;
   return list.find(t => t.endsWith('-' + side)) ?? list[0];
 };
-const text = (scene, x, y, str, size, color = '#fff4d6', extra = {}) =>
-  scene.add.text(x, y, str, { fontFamily: FONT, fontSize: size + 'px', fontStyle: 'bold', color,
-    stroke: '#2a1d10', strokeThickness: Math.max(2, size / 5), resolution: ZOOM, ...extra });
+const textStyle = (size, color, extra) => ({ fontFamily: FONT, fontSize: size + 'px', fontStyle: 'bold', color,
+  stroke: '#2a1d10', strokeThickness: Math.max(2, size / 5), resolution: 2, ...extra });
 
 class Battle extends Phaser.Scene {
   constructor() { super('battle'); }
+
+  text(x, y, str, size, color = '#fff4d6', extra = {}) {
+    const t = this.add.text(x, y, str, textStyle(size, color, extra));
+    t.baseSize = size;
+    this.texts.push(t);
+    return t;
+  }
 
   preload() {
     this.load.image('arena', ART + 'arena.jpg');
@@ -48,6 +67,7 @@ class Battle extends Phaser.Scene {
         this.load.spritesheet(key, ART + key + '.png', { frameWidth: def.frameWidth, frameHeight: def.frameHeight });
       }
     }
+    this.load.image('cardbar', ART + 'cardbar.webp');
     this.load.spritesheet('cards', ART + 'cards.png', { frameWidth: CARD_ART.frameWidth, frameHeight: CARD_ART.frameHeight });
     for (const kind of ['tower', 'castle']) {
       for (const side of ['blue', 'red']) {
@@ -75,56 +95,87 @@ class Battle extends Phaser.Scene {
   }
 
   create() {
-    this.cameras.main.setZoom(ZOOM).centerOn(W / 2, H / 2);
+    this.texts = [];
     this.createAnimations();
     this.state = createBattle();
     this.accumulator = 0;
-    this.selected = 0; // geselecteerde positie in de hand, niet de kaartindex
+    this.selected = null;          // gekozen vak in de hand (0..3), of null
     this.hand = createHand(CARDS.length, this.state.rng);
     this.views = new Map();        // eenheid-id -> { sprite, type, lockUntil, flashUntil }
     this.projectiles = [];         // puur visueel
     this.sparks = [];
     if (DEBUG) window.__HR__ = { scene: this, state: this.state, sim };
 
+    this.backdrop = this.add.graphics().setDepth(-20);   // vult de ruimte rond veld en balk
     this.add.image(0, 0, 'arena').setOrigin(0, 0).setScale(W / WORLD_ART.arena.width).setDepth(-10);
     this.drawDeployZones();
     this.structureViews = this.state.structures.map(s => {
       const def = WORLD_ART[s.kind];
       const foot = STRUCTURE_FOOT[s.kind](s.lane);
       const sprite = this.add.sprite(s.x, foot, `${s.kind}-${s.side}`, 0)
-        .setOrigin(0.5, (def.frameHeight - 2) / def.frameHeight).setScale(1 / ZOOM).setDepth(foot);
-      return { sprite, foot, top: foot - def.frameHeight / ZOOM + 6, flashUntil: 0 };
+        .setOrigin(0.5, (def.frameHeight - 2) / def.frameHeight).setScale(1 / TEX).setDepth(foot);
+      return { sprite, foot, top: foot - def.frameHeight / TEX + 6, flashUntil: 0 };
     });
 
     this.ground = this.add.graphics().setDepth(1);      // teamcirkels onder eenheden
     this.fx = this.add.graphics().setDepth(1000);       // projectielen, vonken
     this.bars = this.add.graphics().setDepth(1010);     // levensbalken
-    this.hud = this.add.graphics().setDepth(1100);
+    this.hud = this.add.graphics().setDepth(1150);      // energie, selectie, kaartoverlays
+    this.cardOverlay = this.add.graphics().setDepth(1165);
+    this.barImage = this.add.image(0, 0, 'cardbar').setOrigin(0, 0).setDepth(1140);
 
-    this.header = text(this, W / 2, 13, '', 13).setOrigin(0.5).setDepth(1200);
-    this.message = text(this, W / 2, FIELD_BOTTOM - 11, 'Kies een kaart en tik op een baan in het blauwe vak', 10).setOrigin(0.5).setDepth(1200);
-    this.debugText = this.add.text(6, 26, '', { fontFamily: 'monospace', fontSize: '7px', color: '#fff', backgroundColor: '#000000aa', resolution: ZOOM })
+    this.header = this.text(W / 2, 13, '', 13).setOrigin(0.5).setDepth(1200);
+    this.message = this.text(W / 2, 32, 'Kies een kaart en tik op een baan in het blauwe vak', 10).setOrigin(0.5).setDepth(1200);
+    this.hint = this.text(W / 2, 0, 'Draai je telefoon voor een groter speelveld', 18, '#e6d2a6').setOrigin(0.5).setDepth(1200);
+    this.energyText = this.text(0, 0, '', 16).setOrigin(0.5).setDepth(1200);
+    this.debugText = this.add.text(6, 46, '', { fontFamily: 'monospace', fontSize: '7px', color: '#fff', backgroundColor: '#000000aa', resolution: 2 })
       .setDepth(2000).setVisible(DEBUG);
     this.createCards();
+    this.createFullscreenButton();
 
-    this.input.on('pointerdown', p => {
-      const x = p.worldX, y = p.worldY;
-      if (this.state.ended || y >= FIELD_BOTTOM || y < 40 || x < ZONE.min || x > ZONE.max) return;
-      const lane = Math.abs(y - LANES[0]) <= Math.abs(y - LANES[1]) ? 0 : 1;
-      if (Math.abs(y - LANES[lane]) > 48) return;
-      const cardIndex = this.hand.slots[this.selected];
-      if (deploy(this.state, 'blue', lane, cardIndex, x)) {
-        playFromHand(this.hand, this.selected);
-        this.refreshCardSlot(this.selected);
-        this.message.setText('Eenheid ingezet — nieuwe kaart getrokken!');
-      } else {
-        this.message.setText('Niet genoeg energie voor deze kaart');
-      }
+    this.input.on('pointerdown', (p, over) => {
+      if (over.length || this.state.ended) return;   // tik op een kaart of knop
+      this.tryDeploy(p.worldX, p.worldY);
     });
     this.input.keyboard?.on('keydown-R', () => this.scene.restart());
+    this.input.keyboard?.on('keydown', e => {
+      const slot = Number(e.key) - 1;                  // toetsen 1-4 kiezen een kaart
+      if (slot >= 0 && slot < HAND_SIZE) this.selectSlot(slot);
+    });
     ensureLatestBuild().then(status => {
       if (status === 'stale') this.message.setText('Er staat een nieuwere versie online — herlaad de pagina');
     });
+
+    this.scale.on('resize', this.layout, this);
+    this.events.once('shutdown', () => this.scale.off('resize', this.layout, this));
+    this.layout();
+  }
+
+  tryDeploy(x, y) {
+    if (y >= FIELD_BOTTOM || y < 40 || x < ZONE.min || x > ZONE.max) return;
+    const lane = Math.abs(y - LANES[0]) <= Math.abs(y - LANES[1]) ? 0 : 1;
+    if (Math.abs(y - LANES[lane]) > 48) return;
+    if (this.selected === null) {
+      this.message.setText('Kies eerst onderaan een kaart');
+      return;
+    }
+    const slot = this.selected;
+    if (!deploy(this.state, 'blue', lane, this.hand.slots[slot], x)) {
+      this.message.setText('Niet genoeg energie voor deze kaart');
+      return;
+    }
+    playFromHand(this.hand, slot);
+    this.selected = null;                               // na spelen niets meer geselecteerd
+    this.cards[slot].enter = 0;                         // nieuwe kaart schuift het vak in
+    this.refreshCardSlot(slot);
+    this.message.setText('Eenheid ingezet — kies je volgende kaart');
+  }
+
+  selectSlot(slot) {
+    if (this.state.ended) return;
+    this.selected = this.selected === slot ? null : slot;   // nogmaals tikken = deselecteren
+    this.message.setText(this.selected === null ? 'Kies een kaart'
+      : CARDS[this.hand.slots[slot]].name + ' gekozen — tik op een baan in het blauwe vak');
   }
 
   drawDeployZones() {
@@ -135,28 +186,15 @@ class Battle extends Phaser.Scene {
     }
   }
 
-  // De speler ziet vier kaarten. Na succesvol inzetten vult de geschudde
-  // trekstapel precies dat vak aan. Illustraties/energiekosten komen uit de
-  // bestaande art en CARDS-config; dit verandert niets aan de gevechtsregels.
+  // Vier kaartvakken in de geschilderde balk. Posities worden in layout() gezet.
   createCards() {
-    const scale = 1 / ZOOM;
-    const cellW = CARD_ART.frameWidth * scale, cardH = CARD_ART.frameHeight * scale;
-    const gap = 15, top = H - cardH - 4;
-    const total = HAND_SIZE * cellW + (HAND_SIZE - 1) * gap;
-    this.cardGems = this.add.graphics().setDepth(1160);
     this.cards = Array.from({ length: HAND_SIZE }, (_, slot) => {
-      const x = W / 2 - total / 2 + cellW / 2 + slot * (cellW + gap);
-      const image = this.add.image(x, top, 'cards', 0).setOrigin(0.5, 0).setScale(scale).setDepth(1150);
-      const zone = this.add.zone(x, top + cardH / 2, cellW, cardH)
-        .setInteractive({ useHandCursor: true }).setDepth(1300);
-      zone.on('pointerdown', () => {
-        if (this.state.ended) return;
-        this.selected = slot;
-        this.message.setText(CARDS[this.hand.slots[slot]].name + ' gekozen — tik op een blauwe baan');
-      });
-      const cost = text(this, x, top + 12, '', 14).setOrigin(0.5).setDepth(1170);
-      const label = text(this, x, top + cardH - 9, '', 8).setOrigin(0.5).setDepth(1170);
-      return { x, top, w: cellW, h: cardH, image, gem: null, cost, label };
+      const image = this.add.image(0, 0, 'cards', 0).setDepth(1160);
+      const zone = this.add.zone(0, 0, 10, 10).setInteractive({ useHandCursor: true }).setDepth(1300);
+      zone.on('pointerdown', () => this.selectSlot(slot));
+      const cost = this.text(0, 0, '', 14).setOrigin(0.5).setDepth(1170);
+      const label = this.text(0, 0, '', 8).setOrigin(0.5).setDepth(1170);
+      return { image, zone, cost, label, enter: 1, x: 0, y: 0, h: 0, k: 0 };
     });
     this.cards.forEach((_, slot) => this.refreshCardSlot(slot));
   }
@@ -164,16 +202,87 @@ class Battle extends Phaser.Scene {
   refreshCardSlot(slot) {
     const view = this.cards[slot];
     const card = CARDS[this.hand.slots[slot]];
-    const art = CARD_ART.cards[card.type];
-    const scale = 1 / ZOOM;
-    view.image.setFrame(art.frame);
-    view.gem = {
-      x: view.x - view.w / 2 + art.gemX * scale,
-      y: view.top + art.gemY * scale,
-      r: art.gemR * scale + 1.5,
-    };
-    view.cost.setText(String(card.cost)).setX(view.gem.x);
+    view.art = CARD_ART.cards[card.type];
+    view.image.setFrame(view.art.frame);
+    view.cost.setText(String(card.cost));
     view.label.setText(CARD_LABEL[card.type] ?? card.name);
+  }
+
+  createFullscreenButton() {
+    this.fsButton = this.add.zone(0, 0, 26, 26).setInteractive({ useHandCursor: true }).setDepth(1300);
+    this.fsButton.on('pointerdown', () => {
+      if (this.scale.isFullscreen) { this.scale.stopFullscreen(); return; }
+      this.scale.startFullscreen();
+      screen.orientation?.lock?.('landscape').catch(() => {});   // Android: liggend vastzetten
+    });
+    this.fsIcon = this.add.graphics().setDepth(1200);
+    const available = this.scale.fullscreen.available;
+    this.fsButton.setVisible(available).input.enabled = available;
+    this.fsIcon.setVisible(available);
+  }
+
+  // Eén centrale plek voor alle schermindeling. Wordt aangeroepen bij start,
+  // bij elke resize en bij draaien van het scherm.
+  layout() {
+    const cam = this.cameras.main;
+    const cw = this.scale.width, ch = this.scale.height;
+    const aspect = cw / ch, portrait = aspect < 1.1;
+    const topH = portrait ? PORTRAIT_TOP : 0;
+    // Balkschaal (wereld per textuurpixel): zo kiezen dat veld + balk de
+    // schermverhouding vullen. Breed scherm = kleinere balk, smal = grotere.
+    const span = BAR_ART.bottom - BAR_ART.mainTop;
+    const wanted = W / aspect - topH;
+    const maxSc = portrait ? W / BAR_ART.width : BAR_MAX_LANDSCAPE;
+    const sc = clamp((wanted - BAR_OVERLAP) / span, 440 / BAR_ART.width, maxSc);
+    const bar = { sc, w: BAR_ART.width * sc, x: W / 2 - BAR_ART.width * sc / 2, y: BAR_OVERLAP - BAR_ART.mainTop * sc };
+    const bottom = Math.max(FIELD_BOTTOM, bar.y + BAR_ART.bottom * sc);
+    const top = -topH;
+    const zoom = Math.min(cw / W, ch / (bottom - top));
+    const viewW = cw / zoom, viewH = ch / zoom;
+    const cy = (top + bottom) / 2;   // inhoud gecentreerd; overgebleven ruimte boven en onder
+    cam.setZoom(zoom).centerOn(W / 2, cy);
+    this.view = { left: W / 2 - viewW / 2, right: W / 2 + viewW / 2, top: cy - viewH / 2, bottom: cy + viewH / 2, portrait, zoom };
+    this.bar = bar;
+
+    this.barImage.setPosition(bar.x, bar.y).setScale(sc);
+    BAR_ART.slots.forEach((s, i) => {
+      const c = this.cards[i];
+      c.x = bar.x + (s.x + s.w / 2) * sc;
+      c.y = bar.y + (s.y + s.h / 2) * sc;
+      c.h = s.h * sc * 0.97;
+      c.k = c.h / CARD_ART.frameHeight;          // wereld per kaarttextuurpixel
+      c.zone.setPosition(c.x, c.y).setSize(s.w * sc, s.h * sc);
+      c.cost.setFontSize(Math.round(c.h * 0.16)).setStroke('#2a1d10', Math.max(2, c.h * 0.03));
+      c.label.setFontSize(Math.round(c.h * 0.085)).setStroke('#2a1d10', Math.max(2, c.h * 0.02));
+    });
+    this.energyText.setFontSize(Math.round(BAR_ART.plaque.h * sc * 0.62));
+
+    // Teksten: in portret groter en in de kopstrook, anders over de lucht.
+    const k = portrait ? 2.1 : 1;
+    this.header.setPosition(W / 2, portrait ? -70 : 13).setFontSize(Math.round(13 * k));
+    this.message.setPosition(W / 2, portrait ? -32 : 32).setFontSize(Math.round(10 * k));
+    this.hint.setPosition(W / 2, Math.max(this.view.top + 26, -112)).setVisible(portrait);
+    // Scherpe tekst: textuurresolutie volgt de werkelijke zoom.
+    const res = clamp(Math.ceil(zoom), 1, 4);
+    for (const t of this.texts) t.setResolution(res);
+
+    const fx = W - 16, fy = portrait ? -100 : 14;
+    this.fsButton.setPosition(fx, fy);
+    this.fsIcon.setPosition(fx, fy);
+    this.drawBackdrop();
+  }
+
+  drawBackdrop() {
+    const g = this.backdrop, v = this.view;
+    g.clear();
+    g.fillStyle(0x15100a).fillRect(v.left - 2, v.top - 2, v.right - v.left + 4, v.bottom - v.top + 4);
+    // aarde onder het veld, over de hele schermbreedte
+    g.fillGradientStyle(0x3a2a1a, 0x3a2a1a, 0x17110a, 0x17110a, 1).fillRect(v.left - 2, FIELD_BOTTOM - 2, v.right - v.left + 4, v.bottom - FIELD_BOTTOM + 4);
+    const fs = this.fsIcon;
+    fs.clear().lineStyle(2, 0xf1dcae, 0.9);
+    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      fs.lineBetween(sx * 8, sy * 8, sx * 3, sy * 8).lineBetween(sx * 8, sy * 8, sx * 8, sy * 3);
+    }
   }
 
   // Vertaalt gebeurtenissen uit de simulatie naar animaties en effecten.
@@ -242,10 +351,12 @@ class Battle extends Phaser.Scene {
 
   showResult(winner) {
     const g = this.add.graphics().setDepth(3000);
-    g.fillStyle(0x1b130b, 0.9).fillRoundedRect(W / 2 - 220, 92, 440, 120, 14);
-    g.lineStyle(3, 0xd9b26a).strokeRoundedRect(W / 2 - 220, 92, 440, 120, 14);
-    text(this, W / 2, 132, winner === 'blue' ? 'OVERWINNING!' : 'VERLOREN!', 34, winner === 'blue' ? '#c4f3c0' : '#ffc0b5').setOrigin(0.5).setDepth(3001);
-    text(this, W / 2, 180, 'Tik om opnieuw te spelen', 15).setOrigin(0.5).setDepth(3001);
+    g.fillStyle(0x1b130b, 0.9).fillRoundedRect(W / 2 - 220, 72, 440, 120, 14);
+    g.lineStyle(3, 0xd9b26a).strokeRoundedRect(W / 2 - 220, 72, 440, 120, 14);
+    this.text(W / 2, 112, winner === 'blue' ? 'OVERWINNING!' : 'VERLOREN!', 34, winner === 'blue' ? '#c4f3c0' : '#ffc0b5').setOrigin(0.5).setDepth(3001);
+    this.text(W / 2, 160, 'Tik om opnieuw te spelen', 15).setOrigin(0.5).setDepth(3001);
+    for (const t of this.texts) t.setResolution(clamp(Math.ceil(this.view.zoom), 1, 4));
+    this.selected = null;
     this.time.delayedCall(400, () => this.input.once('pointerdown', () => this.scene.restart()));
   }
 
@@ -261,7 +372,7 @@ class Battle extends Phaser.Scene {
     this.drawUnits();
     this.drawStructures();
     this.drawEffects(dt);
-    this.drawHud();
+    this.drawHud(dt);
     if (DEBUG) this.drawDebug();
   }
 
@@ -271,7 +382,7 @@ class Battle extends Phaser.Scene {
       const def = UNIT_ART[u.card.type];
       const sprite = def
         ? this.add.sprite(u.x, footY(u), unitTexture(u.card.type, u.side), def.anims.idle[0])
-          .setOrigin(def.originX, def.originY).setScale(1 / ZOOM)
+          .setOrigin(def.originX, def.originY).setScale(1 / TEX)
         : null;
       this.views.set(u.id, { sprite, type: u.card.type, lockUntil: 0, flashUntil: 0 });
     }
@@ -357,38 +468,61 @@ class Battle extends Phaser.Scene {
     });
   }
 
-  drawHud() {
-    const ui = this.hud, s = this.state;
-    ui.clear();
-    ui.fillGradientStyle(0x3b2a18, 0x3b2a18, 0x1f160c, 0x1f160c, 1).fillRect(0, FIELD_BOTTOM, W, H - FIELD_BOTTOM);
-    ui.lineStyle(2, 0xc9a35e).lineBetween(0, FIELD_BOTTOM + 1, W, FIELD_BOTTOM + 1);
-    // energiebalk met vakjes, even breed als de kaartenrij
-    const first = this.cards[0], last = this.cards[this.cards.length - 1];
-    const ex = first.x - first.w / 2, ew = last.x + last.w / 2 - ex, ey = FIELD_BOTTOM + 6, eh = 10;
-    ui.fillStyle(0x140d06).fillRoundedRect(ex - 2, ey - 2, ew + 4, eh + 4, 5);
-    ui.fillStyle(0xb06ee8).fillRoundedRect(ex, ey, ew * s.energy.blue / ENERGY_MAX, eh, 4);
-    for (let i = 1; i < ENERGY_MAX; i++) ui.lineStyle(1, 0x140d06, 0.8).lineBetween(ex + ew * i / ENERGY_MAX, ey, ex + ew * i / ENERGY_MAX, ey + eh);
-    const g = this.cardGems;
-    g.clear();
+  drawHud(dt) {
+    const ui = this.hud, o = this.cardOverlay, s = this.state, bar = this.bar, sc = bar.sc;
+    ui.clear(); o.clear();
+
+    // Energie: vulling in het plaatje (10 vakjes) + ring om het medaillon tot het volgende punt.
+    const p = BAR_ART.plaque, m = BAR_ART.medal;
+    const px = bar.x + p.x * sc, py = bar.y + p.y * sc, pw = p.w * sc, ph = p.h * sc;
+    const energy = s.energy.blue, whole = Math.floor(energy);
+    const segW = pw / ENERGY_MAX;
+    for (let i = 0; i < ENERGY_MAX; i++) {
+      const fill = clamp(energy - i, 0, 1);
+      if (fill <= 0) continue;
+      ui.fillStyle(i < whole ? 0xa05ae6 : 0x6e3aa6, 0.95).fillRect(px + i * segW + 0.6, py + 2, segW * fill - 1.2, ph - 4);
+    }
+    for (let i = 1; i < ENERGY_MAX; i++) ui.lineStyle(1, 0x1b120a, 0.7).lineBetween(px + i * segW, py + 2, px + i * segW, py + ph - 2);
+    this.energyText.setPosition(px + pw / 2, py + ph / 2).setText(String(whole));
+    const mx = bar.x + m.x * sc, my = bar.y + m.y * sc, mr = m.r * sc;
+    if (whole < ENERGY_MAX) {
+      ui.lineStyle(Math.max(2, mr * 0.12), 0xd7a8ff, 0.9)
+        .beginPath().arc(mx, my, mr * 1.03, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (energy - whole), false).strokePath();
+    } else {
+      ui.lineStyle(Math.max(2, mr * 0.12), 0xffe08a, 0.6 + 0.3 * Math.sin(s.time * 6)).strokeCircle(mx, my, mr * 1.03);
+    }
+
+    // Kaarten: gekozen kaart komt omhoog met goud; te duur = gedimd.
     this.cards.forEach((c, i) => {
-      const sel = i === this.selected, affordable = s.energy.blue >= CARDS[this.hand.slots[i]].cost;
-      const lift = sel ? -4 : 0;
-      c.image.setY(c.top + lift).setTint(affordable ? 0xffffff : 0x6f6f6f);
+      c.enter = Math.min(1, c.enter + dt / 0.28);
+      const card = CARDS[this.hand.slots[i]];
+      const sel = i === this.selected, affordable = energy >= card.cost;
+      const ease = 1 - Math.pow(1 - c.enter, 3);
+      const lift = sel ? -c.h * 0.08 : 0;
+      const y = c.y + lift + (1 - ease) * c.h * 0.9;
+      const w = CARD_ART.frameWidth * c.k, h = CARD_ART.frameHeight * c.k;
+      c.image.setPosition(c.x, y).setScale(c.k).setAlpha(0.3 + 0.7 * ease)
+        .setTint(affordable ? 0xffffff : 0x5c5c5c);
+      const cardW = c.art.width * c.k;
       if (sel) {
-        ui.fillStyle(0xffd76a, 0.35).fillRoundedRect(c.x - c.w / 2 - 4, c.top + lift - 4, c.w + 8, c.h + 8, 9);
-        ui.lineStyle(2.5, 0xffe08a).strokeRoundedRect(c.x - c.w / 2 - 3, c.top + lift - 3, c.w + 6, c.h + 6, 8);
+        ui.fillStyle(0xffd76a, 0.45).fillRoundedRect(c.x - cardW / 2 - 4, y - h / 2 - 4, cardW + 8, h + 8, 8);
+        o.lineStyle(Math.max(2, c.h * 0.03), 0xffe9a0).strokeRoundedRect(c.x - cardW / 2 - 2, y - h / 2 - 2, cardW + 4, h + 4, 7);
       }
-      // naamstrook en energiejuweel (echte kosten)
-      g.fillStyle(0x1b120a, 0.78).fillRoundedRect(c.x - c.w / 2 + 5, c.top + lift + c.h - 16, c.w - 10, 13, 4);
-      c.label.setY(c.top + lift + c.h - 9.5);
-      const gy = c.gem.y + lift;
-      g.fillStyle(affordable ? 0x7a2fc2 : 0x4a4452).fillCircle(c.gem.x, gy, c.gem.r);
-      g.fillStyle(affordable ? 0xb27af0 : 0x6c6672, 0.9).fillCircle(c.gem.x - c.gem.r * 0.25, gy - c.gem.r * 0.3, c.gem.r * 0.5);
-      g.lineStyle(2, 0xe8c574).strokeCircle(c.gem.x, gy, c.gem.r);
-      c.cost.setY(gy);
+      const left = c.x - w / 2, topY = y - h / 2;
+      // naamstrook
+      const sh = h * 0.13;
+      o.fillStyle(0x1b120a, 0.8).fillRoundedRect(c.x - cardW / 2 + h * 0.04, topY + h - sh - h * 0.03, cardW - h * 0.08, sh, 4);
+      c.label.setPosition(c.x, topY + h - sh / 2 - h * 0.03).setAlpha(affordable ? 1 : 0.6);
+      // energiejuweel met de echte kosten
+      const gx = left + c.art.gemX * c.k, gy = topY + c.art.gemY * c.k, gr = c.art.gemR * c.k + 1.5;
+      o.fillStyle(affordable ? 0x7a2fc2 : 0x4a4452).fillCircle(gx, gy, gr);
+      o.fillStyle(affordable ? 0xb27af0 : 0x6c6672, 0.9).fillCircle(gx - gr * 0.25, gy - gr * 0.3, gr * 0.5);
+      o.lineStyle(Math.max(1.5, gr * 0.12), 0xe8c574).strokeCircle(gx, gy, gr);
+      c.cost.setPosition(gx, gy);
     });
+
     const left = Math.max(0, MATCH_SECONDS - s.time);
-    this.header.setText(`HISTORICAL ROYALE   ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}   Energie ${Math.floor(s.energy.blue)}/${ENERGY_MAX}   ${VERSION_LABEL}`);
+    this.header.setText(`LEGION ROYALE   ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}   ${VERSION_LABEL}`);
   }
 
   drawDebug() {
@@ -400,10 +534,33 @@ class Battle extends Phaser.Scene {
   }
 }
 
-new Phaser.Game({
-  type: Phaser.AUTO, parent: 'game', width: W * ZOOM, height: H * ZOOM,
-  backgroundColor: '#1f160c',
-  scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+// Canvas = schermgrootte x pixelratio (begrensd), weergegeven op schermgrootte.
+// Bij elke resize/draai wordt het canvas aangepast; de scène herschikt via layout().
+const stage = document.getElementById('stage');
+function stageSize() {
+  const w = Math.max(1, stage.clientWidth), h = Math.max(1, stage.clientHeight);
+  const ratio = Math.max(1, Math.min(window.devicePixelRatio || 1, 2.5, 3200 / w, 3200 / h));
+  return { w: Math.round(w * ratio), h: Math.round(h * ratio), ratio };
+}
+const initial = stageSize();
+const game = new Phaser.Game({
+  type: Phaser.AUTO, parent: stage, width: initial.w, height: initial.h,
+  backgroundColor: '#15100a',
+  scale: { mode: Phaser.Scale.NONE, zoom: 1 / initial.ratio },
   render: { antialias: true, roundPixels: false },
   scene: [Battle],
 });
+let resizeTimer = null;
+function resizeGame() {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    const size = stageSize();
+    if (size.w === game.scale.width && size.h === game.scale.height) return;
+    game.scale.resize(size.w, size.h);
+    game.scale.setZoom(1 / size.ratio);   // ná resize: zet ook de CSS-maat van het canvas
+  }, 50);
+}
+window.addEventListener('resize', resizeGame);
+window.addEventListener('orientationchange', resizeGame);
+window.visualViewport?.addEventListener('resize', resizeGame);
+document.addEventListener('fullscreenchange', resizeGame);

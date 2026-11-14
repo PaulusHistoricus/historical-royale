@@ -20,17 +20,24 @@ export function createHand(cardCount, rng = Math.random, size = HAND_SIZE) {
   return { slots: deck.splice(0, size), drawPile: deck, discard: [], rng };
 }
 
-// Aantal van de kaart in het gekozen vak. Raakt de stapel leeg, dan wordt
-// uitsluitend de eerder gespeelde aflegstapel opnieuw geschud.
+// Speelt de kaart in het gekozen vak en vult dat vak met de bovenste kaart van
+// de trekstapel. Raakt de trekstapel daardoor leeg, dan wordt de aflegstapel
+// (inclusief de net gespeelde kaart) meteen geschud, zodat `nextCard` altijd
+// een kaart kan tonen.
 export function playFromHand(hand, slot) {
   if (!Number.isInteger(slot) || slot < 0 || slot >= hand.slots.length) return null;
   const used = hand.slots[slot];
   hand.discard.push(used);
+  const next = hand.drawPile.shift();
+  hand.slots[slot] = next;
   if (hand.drawPile.length === 0) {
     hand.drawPile = shuffle(hand.discard, hand.rng);
     hand.discard = [];
   }
-  const next = hand.drawPile.shift();
-  hand.slots[slot] = next;
   return { used, next };
+}
+
+/** De kaart die na de volgende gespeelde kaart in de hand komt. */
+export function nextCard(hand) {
+  return hand.drawPile[0];
 }
