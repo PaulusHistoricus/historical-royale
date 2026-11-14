@@ -33,7 +33,7 @@ Lees dit voordat je iets aan Historical Royale wijzigt.
 - `{type:'destroyed', id, kind, side}`
 - `{type:'end', winner}`
 
-Zo werkt de weergave nu (v0.8):
+Zo werkt de weergave nu:
 
 - Elke eenheid krijgt een sprite (`this.views`). `unit.state === 'move'` → animatie `walk`, anders `idle`.
 - Een `hit`-event speelt bij de aanvaller `attack` en bij het doelwit kort `hit` + rode flits. Een `death`-event speelt `death` en laat het lijk vervagen.
@@ -41,7 +41,10 @@ Zo werkt de weergave nu (v0.8):
 - Torens en kastelen tonen 5 schadestadia (frame 0–4) op basis van `hp / max`.
 - Animatienamen per eenheid staan in `src/art/units.json` (`idle`, `walk`, `attack`, `hit`, `death`). Alle art kijkt naar rechts; `setFlipX` draait rood om.
 - De kaartenbalk gebruikt `public/assets/art/cards.png`; het energiejuweel en de naam worden er in `drawHud` overheen getekend met de waarden uit `CARDS`.
-- Het canvas rendert op 2× (`ZOOM`); alle coördinaten blijven wereldcoördinaten (960 × 432). Gebruik `pointer.worldX/worldY`.
+- **Schermindeling (v0.10)**: één functie `layout()` in `src/main.js` regelt alles, bij start, resize en draaien. Het speelveld (0..310) is altijd volledig zichtbaar; de kaartenbalk (`cardbar.webp`) begint op `BAR_OVERLAP` en schaalt mee (liggend/desktop maximaal ±30 % van de hoogte, `BAR_MAX_LANDSCAPE`); in portret komt er een kopstrook boven het veld. Hardcode geen schermposities: zet nieuwe UI in `layout()` en gebruik `this.view` / `this.bar`.
+- Het canvas is schermgrootte × devicePixelRatio (`stageSize()` onderaan `main.js`); alle coördinaten blijven wereldcoördinaten (960 breed). Gebruik `pointer.worldX/worldY`.
+- Kaartkeuze: `this.selected` is een vak (0–3) of `null`. Na een geslaagde inzet wordt het `null` en schuift de nieuwe kaart het vak in. Toetsen 1–4 kiezen ook een kaart.
+- De advertentie staat in `index.html` **onder** het spel, nooit eroverheen (AdSense-regels: geen advertenties waar per ongeluk op getikt wordt tijdens spelen).
 
 Nieuwe art toevoegen: zie `art/README.md`. Kort: zet het bronbestand in `art/source/`, voeg de uitsnede toe in `tools/art/units.py` of `world.py`, draai `python3 tools/art/build.py`, en controleer in de browser.
 

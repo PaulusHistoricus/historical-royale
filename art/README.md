@@ -31,6 +31,7 @@ python3 tools/art/build.py
 | `ruiterboogschutter.png` | Mongoolse ruiterboogschutter: rust 4, lopen 6, schieten 6, geraakt 4, sterven 6 |
 | `musketier.png` | Musketier: rust 4, lopen 8, schieten 8, geraakt 4, sterven 7 |
 | `kaarten.png` | De zeven kaarten onderin, in de volgorde van `CARDS` |
+| `kaartenbalk.png` | De kaartenbalk; vakken, medaillon en plaatje zijn opgemeten in `tools/art/bar.py` |
 | `torens-kastelen.png` | Schadestadia toren en kasteel (bovenste helft) en de arena (onderste helft) |
 
 ## Bronnen met echte transparantie
