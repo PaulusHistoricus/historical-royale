@@ -1,0 +1,17 @@
+{
+ "tower": {
+  "frameWidth": 128,
+  "frameHeight": 180,
+  "stages": 5
+ },
+ "castle": {
+  "frameWidth": 333,
+  "frameHeight": 404,
+  "stages": 5
+ },
+ "arena": {
+  "width": 1920,
+  "height": 620,
+  "sourceScale": 0.5741626794258373
+ }
+}

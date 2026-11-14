@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { gap, inRange, step } from '../src/sim/battle.js';
 import { CARDS } from '../src/sim/config.js';
-import { arena, place, run, hitsBy, hitsOn, TICK, LEGIONAIR, BOOGSCHUTTER, KANON } from './helpers.js';
+import { arena, place, run, hitsBy, hitsOn, TICK, LEGIONAIR, BOOGSCHUTTER, KANON, BLUE_TOWER, RED_TOWER } from './helpers.js';
 
 const tower = (s, side, lane) => s.structures.find(x => x.id === `tower-${side}-${lane}`);
 
@@ -111,11 +111,11 @@ test('gemengde kluwen (legionairs, boogschutters, kanon) wordt altijd uitgevocht
 
 test('torenverdediging: legionair keert om voor een vijand achter hem die de toren aanvalt', () => {
   const s = arena();
-  const raider = place(s, 'red', 1, LEGIONAIR, 200);
+  const raider = place(s, 'red', 1, LEGIONAIR, BLUE_TOWER + 50);
   run(s, 1);
   assert.equal(raider.targetId, 'tower-blue-1', 'rood staat de blauwe toren te slopen');
 
-  const defender = place(s, 'blue', 1, LEGIONAIR, 445); // ver buiten detectiebereik, vijand in de rug
+  const defender = place(s, 'blue', 1, LEGIONAIR, BLUE_TOWER + 230); // vijand in de rug
   const log = run(s, 8);
   assert.ok(hitsBy(log, defender).some(h => h.targetId === raider.id), 'verdediger valt de aanvaller aan');
   assert.ok(hitsOn(log, raider).some(h => h.kind === 'tower'), 'toren schiet zelf ook');
@@ -125,8 +125,8 @@ test('torenverdediging: legionair keert om voor een vijand achter hem die de tor
 
 test('torenverdediging: aanvaller draait zich om naar de verdediger die hem in de rug aanvalt', () => {
   const s = arena();
-  const raider = place(s, 'red', 0, LEGIONAIR, 200);
-  const defender = place(s, 'blue', 0, LEGIONAIR, 300);
+  const raider = place(s, 'red', 0, LEGIONAIR, BLUE_TOWER + 50);
+  const defender = place(s, 'blue', 0, LEGIONAIR, BLUE_TOWER + 150);
   const log = run(s, 4);
   assert.ok(hitsBy(log, raider).some(h => h.targetId === defender.id));
   assert.equal(raider.facing, 1);
@@ -136,7 +136,7 @@ test('legionair sloopt een toren en loopt daarna door naar het kasteel', () => {
   const s = arena();
   const t = tower(s, 'red', 0);
   t.hp = 60;
-  const blue = place(s, 'blue', 0, LEGIONAIR, 700);
+  const blue = place(s, 'blue', 0, LEGIONAIR, RED_TOWER - 40);
   blue.hp = blue.max = 5000; // overleeft het torenvuur in deze test
   const log = run(s, 6);
   assert.equal(t.hp, 0);

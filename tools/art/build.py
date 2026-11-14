@@ -1,0 +1,21 @@
+"""Zet de ruwe AI-art in art/source/ om naar game-assets.
+
+    python3 tools/art/build.py
+
+Vereist: pip install pillow numpy scipy
+Schrijft: public/assets/art/*.png|jpg (textures) en src/art/*.json (frames/animaties).
+De uitsnijposities staan in units.py en world.py; zie art/README.md.
+"""
+import os, sys
+sys.path.insert(0, os.path.dirname(__file__))
+from units import build_units
+from world import build_world
+
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+SRC = os.path.join(ROOT, 'art', 'source') + '/'
+OUT = os.path.join(ROOT, 'public', 'assets', 'art')
+os.makedirs(OUT, exist_ok=True)
+build_units(SRC, OUT, os.path.join(ROOT, 'src', 'art', 'units.json'))
+build_world(SRC, OUT, os.path.join(ROOT, 'src', 'art', 'world.json'))
+for f in sorted(os.listdir(OUT)):
+    print(f'{f:24s} {os.path.getsize(os.path.join(OUT, f)) // 1024:5d} kB')

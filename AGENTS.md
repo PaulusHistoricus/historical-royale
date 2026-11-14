@@ -10,6 +10,9 @@ Lees dit voordat je iets aan Historical Royale wijzigt.
 | `src/sim/battle.js` | Alle spelregels: lopen, doelwit kiezen, aanvallen, schade, AI, winnaar | Geen Phaser/DOM. Wijzig alleen samen met een test in `tests/` |
 | `src/main.js` | Weergave en invoer (Phaser) | Leest `state`, tekent, en reageert op events. Bevat **geen** spelregels |
 | `src/version.js`, `vite.config.js` | Versie/build op het scherm en updatecontrole | Versie alleen in `package.json` ophogen |
+| `art/source/` | Ruwe AI-art (spritesheets, arena, schadestadia) | Origineel; niet bewerken, alleen toevoegen |
+| `tools/art/` | Pijplijn die `art/source/` omzet naar game-assets | Draai `python3 tools/art/build.py` na elke art-wijziging |
+| `public/assets/art/`, `src/art/*.json` | Gegenereerde textures en frame/animatie-manifesten | **Niet met de hand bewerken**: worden overschreven |
 | `tests/` | Geautomatiseerde tests (`npm test`, Node test runner, geen extra packages) | Moet groen zijn; de deploy stopt anders |
 
 ## Gevechtsmodel in het kort
@@ -30,7 +33,18 @@ Lees dit voordat je iets aan Historical Royale wijzigt.
 - `{type:'destroyed', id, kind, side}`
 - `{type:'end', winner}`
 
-Voor sprites: gebruik `unit.state` (`move` = loopanimatie, `attack` = aanvalsanimatie), `unit.facing` (1 of −1) en het `hit`-event als moment van de klap. Bewaar visuele timers in `this.anim`, niet op de eenheid in `state`.
+Zo werkt de weergave nu (v0.8):
+
+- Elke eenheid krijgt een sprite (`this.views`). `unit.state === 'move'` → animatie `walk`, anders `idle`.
+- Een `hit`-event speelt bij de aanvaller `attack` en bij het doelwit kort `hit` + rode flits. Een `death`-event speelt `death` en laat het lijk vervagen.
+- Pijlen, kanonskogels en vonken zijn puur visueel (`this.projectiles`, `this.sparks`); de schade is al in de simulatie toegepast.
+- Torens en kastelen tonen 5 schadestadia (frame 0–4) op basis van `hp / max`.
+- Animatienamen per eenheid staan in `src/art/units.json` (`idle`, `walk`, `attack`, `hit`, `death`). Alle art kijkt naar rechts; `setFlipX` draait rood om.
+- Het canvas rendert op 2× (`ZOOM`); alle coördinaten blijven wereldcoördinaten (960 × 432). Gebruik `pointer.worldX/worldY`.
+
+Nieuwe art toevoegen: zie `art/README.md`. Kort: zet het bronbestand in `art/source/`, voeg de uitsnede toe in `tools/art/units.py` of `world.py`, draai `python3 tools/art/build.py`, en controleer in de browser.
+
+De arena-art bepaalt de plek van banen, torens en kastelen (`LANES` en `STRUCTURE_POSITIONS` in `src/sim/config.js`). Houd het veld **spiegelsymmetrisch** (rood = 960 − blauw); een asymmetrie van 11 px gaf rood al 82 % winkans.
 
 ## Nieuw gedrag of nieuwe eenheid
 

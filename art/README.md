@@ -1,0 +1,35 @@
+# Art-pijplijn
+
+De art in `art/source/` is gegenereerd met AI en komt als losse sheets op een witte of donkere achtergrond.
+`tools/art/build.py` maakt daar game-assets van:
+
+```bash
+pip install pillow numpy scipy
+python3 tools/art/build.py
+```
+
+## Wat het script doet
+
+1. **Achtergrond weghalen**: alles wat via de rand verbonden is met de achtergrondkleur wordt transparant (`extract.py: fg_mask`).
+2. **Frames vinden**: rijen en kolommen worden gesplitst op lege stroken. Waar effecten frames verbinden (zwaardzwaai, pijl) staan vaste knippunten in `units.py` (`split_at`).
+3. **Uitlijnen**: elk frame wordt op de voeten uitgelijnd (onderkant, midden van de onderste 22 %), zodat animaties niet verspringen.
+4. **Teamkleuren**: rood → blauw (of omgekeerd) via een tintverschuiving van alleen verzadigde rode/blauwe pixels. De boogschutter heeft geen teamkleur; het team zie je aan de cirkel onder de voeten en de levensbalk.
+5. **Arena**: de geschilderde torens en kastelen worden weggekloond, zodat de beschadigbare versies erop passen.
+6. **Uitvoer**: textures op 2× wereldresolutie in `public/assets/art/`, frame- en animatiegegevens in `src/art/units.json` en `src/art/world.json`.
+
+## Bronbestanden
+
+| Bestand | Gebruikt voor |
+| --- | --- |
+| `legionair.png` | Legionair: rust 4, lopen 6, aanvallen 7, geraakt 2, sterven 6 |
+| `boogschutter.png` | Boogschutter: rust 3, lopen 6, schieten 6, geraakt 2, sterven 6 |
+| `arena-kanon-a.png` | Kanon: lopen 4, vuren 4 (onderste rij) |
+| `arena-kanon-b.png` | Kanon: kapot (laatste frame onderste rij) |
+| `arena-kanon-c.png` | Niet gebruikt (alternatieve arena/kanon) |
+| `torens-kastelen.png` | Schadestadia toren en kasteel (bovenste helft) en de arena (onderste helft) |
+
+## Tips voor nieuwe art
+
+- Vraag om **één personage per vak, op een effen witte achtergrond, met ruimte tussen de frames**, kijkend naar rechts.
+- Zelfde formaat en stijl als de bestaande sheets; vaste rijen: rust, lopen, aanvallen, geraakt, sterven.
+- Na het bouwen: open de game met `?debug=1` en kijk of voeten op de baan staan en niets verspringt.

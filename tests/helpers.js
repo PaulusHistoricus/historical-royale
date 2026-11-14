@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import { createBattle, addUnit, step, findById, gap } from '../src/sim/battle.js';
 
+import { STRUCTURE_POSITIONS } from '../src/sim/config.js';
+
 export const TICK = 1 / 60;
+// Posities van gebouwen, zodat tests niet breken als de arena verschuift.
+export const BLUE_TOWER = STRUCTURE_POSITIONS.blue.towerX;
+export const RED_TOWER = STRUCTURE_POSITIONS.red.towerX;
+export const BLUE_CASTLE = STRUCTURE_POSITIONS.blue.castleX;
 export const LEGIONAIR = 0, BOOGSCHUTTER = 1, KANON = 2;
 
 /** Leeg slagveld zonder computertegenstander, zodat een test alles zelf bepaalt. */
