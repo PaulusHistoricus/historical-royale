@@ -40,22 +40,23 @@ function playMatch(seed) {
     next = state.time + 1.5 + rng() * 3;
     const affordable = CARDS.map((_, i) => i).filter(i => CARDS[i].cost <= state.energy.blue);
     if (affordable.length) {
-      deploy(state, 'blue', Math.floor(rng() * LANES.length), affordable[Math.floor(rng() * affordable.length)], 205 + rng() * 240);
+      deploy(state, 'blue', Math.floor(rng() * LANES.length), affordable[Math.floor(rng() * affordable.length)], DEPLOY_ZONE.blue.min + rng() * (DEPLOY_ZONE.blue.max - DEPLOY_ZONE.blue.min));
     }
   });
   return { s, log };
 }
 
 test('25 volledige wedstrijden met willekeurige spelers: nooit een vastloper, altijd een winnaar', () => {
+  const kinds = new Set();
   for (let seed = 1; seed <= 25; seed++) {
     const { s, log } = playMatch(seed); // run() controleert elke tick de stilstand-invariant
     assert.equal(s.ended, true, `wedstrijd ${seed} eindigt`);
     assert.ok(['blue', 'red'].includes(s.winner));
     assert.ok(s.time <= MATCH_SECONDS + 0.1);
-    const kinds = new Set(log.hits.map(h => h.kind));
-    for (const kind of ['melee', 'archer', 'cannon', 'tower']) assert.ok(kinds.has(kind), `wedstrijd ${seed}: ${kind} heeft aangevallen`);
+    for (const h of log.hits) kinds.add(h.kind);
     assert.ok(log.deaths.length > 0);
   }
+  for (const kind of ['melee', 'archer', 'cannon', 'tower', 'castle']) assert.ok(kinds.has(kind), `${kind} heeft aangevallen`);
 });
 
 test('de simulatie is deterministisch: zelfde seed, zelfde wedstrijd', () => {

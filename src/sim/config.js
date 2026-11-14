@@ -7,14 +7,17 @@
 // eenheid stopt precies wanneer zijn doelwit binnen bereik is. Daardoor kan
 // "gestopt maar niet binnen aanvalsbereik" (de bug uit issue #1) niet bestaan.
 
+// Wereld = 960 x 432. Het speelveld (0..FIELD_BOTTOM) volgt de arena-art in
+// public/assets/art/arena.jpg; banen, torens en kastelen staan waar ze in de
+// art geschilderd zijn. Daaronder zit de kaartenbalk.
 export const W = 960;
-export const H = 600;
-export const LANES = [155, 355];
-export const FIELD_BOTTOM = 485;
+export const H = 432;
+export const LANES = [123, 221];
+export const FIELD_BOTTOM = 310;
 
 export const DEPLOY_ZONE = {
-  blue: { min: 205, max: 445 },
-  red: { min: 540, max: 755 },
+  blue: { min: 268, max: 465 },
+  red: { min: 495, max: 692 },
 };
 
 export const MATCH_SECONDS = 240;
@@ -33,20 +36,20 @@ export const CARDS = [
 ];
 
 export const STRUCTURES = {
-  tower:  { hp: 850,  radius: 22, damage: 32, range: 125, rate: 1.05 },
-  castle: { hp: 2400, radius: 34, damage: 32, range: 125, rate: 1.05 },
+  tower:  { hp: 850,  radius: 28, damage: 32, range: 125, rate: 1.05 },
+  castle: { hp: 2400, radius: 58, damage: 32, range: 125, rate: 1.05 },
 };
 
 export const STRUCTURE_POSITIONS = {
-  blue: { towerX: 150, castleX: 55 },
-  red: { towerX: 810, castleX: 905 },
-  castleY: 255,
+  blue: { towerX: 234, castleX: 86 },
+  red: { towerX: 726, castleX: 874 },
+  castleY: 172,
 };
 
 export const AI = {
   firstMove: 2,
   minDelay: 2.8,
   maxDelay: 4.8,
-  spawnMin: 580,
-  spawnMax: 735,
+  spawnMin: 540,
+  spawnMax: 692,
 };

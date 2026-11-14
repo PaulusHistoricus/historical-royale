@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chooseTarget, objectiveFor, step } from '../src/sim/battle.js';
 import { DETECTION_RANGE } from '../src/sim/config.js';
-import { arena, place, run, TICK, LEGIONAIR, BOOGSCHUTTER } from './helpers.js';
+import { arena, place, run, TICK, LEGIONAIR, BOOGSCHUTTER, BLUE_TOWER, BLUE_CASTLE } from './helpers.js';
 
 test('zonder vijanden in de buurt is het doelwit de toren van de eigen baan', () => {
   const s = arena();
@@ -93,9 +93,9 @@ test('bij het kasteel vechten doorgebroken eenheden uit beide banen met elkaar',
 
 test('torens schieten op de dichtstbijzijnde vijand in hun eigen baan; het kasteel in elke baan', () => {
   const s = arena();
-  const near = place(s, 'red', 0, LEGIONAIR, 200);
-  const far = place(s, 'red', 0, LEGIONAIR, 260);
-  const otherLane = place(s, 'red', 1, LEGIONAIR, 200);
+  const near = place(s, 'red', 0, LEGIONAIR, BLUE_TOWER + 45);
+  const far = place(s, 'red', 0, LEGIONAIR, BLUE_TOWER + 105);
+  const otherLane = place(s, 'red', 1, LEGIONAIR, BLUE_TOWER + 45);
   near.hp = far.hp = otherLane.hp = 100000;
   let log = run(s, 0.5);
   assert.deepEqual([...new Set(log.hits.filter(h => h.attackerId === 'tower-blue-0').map(h => h.targetId))], [near.id]);
@@ -103,7 +103,7 @@ test('torens schieten op de dichtstbijzijnde vijand in hun eigen baan; het kaste
 
   const t = arena();
   t.structures.find(x => x.id === 'tower-blue-1').hp = 0;
-  const siege = place(t, 'red', 1, LEGIONAIR, 120);
+  const siege = place(t, 'red', 1, LEGIONAIR, BLUE_CASTLE + 80);
   siege.hp = 100000;
   log = run(t, 3);
   assert.ok(log.hits.some(h => h.attackerId === 'castle-blue' && h.targetId === siege.id));
