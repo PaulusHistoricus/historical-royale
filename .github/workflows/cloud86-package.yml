@@ -1,4 +1,4 @@
-name: Cloud86 upload ZIP
+name: Cloud86 public-private ZIP
 
 on:
   push:
@@ -29,19 +29,57 @@ jobs:
       - run: npm test
       - name: Build for Cloud86 subdomain root
         run: npx vite build --base=/
-      - name: Verify deploy files
+      - name: Package public and private folders
+        shell: bash
         run: |
           test -f dist/index.html
           test -f dist/version.json
           test -d dist/assets
           if grep -q '/historical-royale/' dist/index.html; then
-            echo "Wrong base URL for Cloud86" >&2
+            echo 'Wrong base URL for Cloud86' >&2
             exit 1
           fi
-      - name: Upload website files as ZIP
+          mkdir -p cloud86-package/public cloud86-package/private
+          cp -a dist/. cloud86-package/public/
+          cat > cloud86-package/private/README.txt <<'EOF'
+          LEGION ROYALE - PRIVATE
+          This directory is reserved for future server code, account data,
+          session storage and secrets. There is no login system yet.
+          Never expose this directory through a web server.
+          Do not store real credentials in the GitHub repository or this ZIP.
+          EOF
+          cat > cloud86-package/UPLOAD-INSTRUCTIES.txt <<'EOF'
+          LEGION ROYALE - CLOUD86 / PLESK
+
+          Intended website: https://legionroyale.paulushistoricus.nl/
+
+          Package structure:
+              public/   Ready-built browser game (index.html + assets)
+              private/  Reserved for later authentication / server components
+
+          IMPORTANT: The web document root must point ONLY at public/.
+          The private/ folder must be OUTSIDE the web document root.
+
+          In Plesk:
+          1. Open the subdomain legionroyale.paulushistoricus.nl.
+          2. Set the document root to public/ if your hosting configuration
+             allows this and put both folders under the subdomain home folder.
+          3. Otherwise: upload ONLY THE CONTENTS of public/ into httpdocs/;
+             create private/ next to httpdocs/, not inside it.
+          4. Use Plesk File Manager to upload and extract the ZIP.
+          5. Enable HTTPS / Let's Encrypt and then open the subdomain.
+
+          The game is static. There is currently NO user registration,
+          login endpoint, password storage or database. Those must be built
+          and secured separately before adding real accounts.
+
+          Source of truth: github.com/PaulusHistoricus/historical-royale
+          Rebuild and redeploy after changes on GitHub.
+          EOF
+      - name: Upload ready-to-place Cloud86 package
         uses: actions/upload-artifact@v4
         with:
-          name: legionroyale-cloud86-upload
-          path: dist/
+          name: legionroyale-cloud86-public-private
+          path: cloud86-package/
           if-no-files-found: error
           retention-days: 30
