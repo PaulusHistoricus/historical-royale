@@ -168,8 +168,43 @@ class Battle extends Phaser.Scene {
             g.fillStyle(0xb9aa8a).fillRect(s.x+i*21-9,s.y-h/2-12,17,15);
           }
         }
+        // Five visual damage stages based on actual structure HP.
+        // These are purely decorative; combat stays in src/sim/.
+        const health=Math.max(0,s.hp/s.max);
+        const stage=health>.75?0:health>.5?1:health>.25?2:3;
+        if(stage>=1){
+          g.lineStyle(2,0x534b43,.85);
+          g.beginPath();
+          g.moveTo(s.x-w*.28,s.y-h*.22);
+          g.lineTo(s.x-w*.11,s.y-h*.08);
+          g.lineTo(s.x-w*.2,s.y+h*.08);
+          g.lineTo(s.x-w*.05,s.y+h*.18);
+          g.strokePath();
+        }
+        if(stage>=2){
+          g.fillStyle(0x716b61).fillTriangle(s.x+w*.27,s.y-h*.5,s.x+w*.48,s.y-h*.5,s.x+w*.48,s.y-h*.27);
+          g.fillStyle(0x847768).fillRect(s.x-w*.43,s.y+h*.37,13,8);
+          g.fillStyle(0x595a55,.5).fillEllipse(s.x+w*.22,s.y-h*.54,18,12);
+          g.fillStyle(0x76736e,.35).fillCircle(s.x+w*.15,s.y-h*.7,13);
+        }
+        if(stage>=3){
+          const flicker=Math.sin(state.time*11+s.x)*3;
+          g.fillStyle(0xc64c19).fillEllipse(s.x+w*.21,s.y-h*.35,17,27+flicker);
+          g.fillStyle(0xffba32).fillEllipse(s.x+w*.22,s.y-h*.33,9,19+flicker);
+          g.fillStyle(0x444641,.55).fillCircle(s.x+w*.22,s.y-h*.77,14);
+          g.fillStyle(0x77736c,.35).fillCircle(s.x+w*.3,s.y-h*.95,19);
+        }
       } else {
-        g.fillStyle(0x6e6254).fillEllipse(s.x,s.y+15,w,26);
+        // Destroyed: irregular rubble instead of an intact tower.
+        g.fillStyle(0x514f47,.5).fillEllipse(s.x,s.y+18,w+14,24);
+        for(let i=0;i<9;i++){
+          const dx=((i*23)% (w+8))-(w+8)/2;
+          const dy=7+(i*13)%20;
+          const rw=8+(i*7)%13;
+          g.fillStyle(i%2?0x988a74:0x6e6254);
+          g.fillTriangle(s.x+dx,s.y+dy-rw*.65,s.x+dx-rw*.7,s.y+dy+5,s.x+dx+rw*.7,s.y+dy+5);
+        }
+        g.fillStyle(0x77736c,.25).fillCircle(s.x+8,s.y-11,17);
       }
       g.fillStyle(0x262724).fillRect(s.x-25,s.y-h/2-25,50,7);
       g.fillStyle(col).fillRect(s.x-25,s.y-h/2-25,50*Math.max(0,s.hp/s.max),7);
