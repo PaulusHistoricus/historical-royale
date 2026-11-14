@@ -114,42 +114,42 @@ class Battle extends Phaser.Scene {
   }
 
   targetFor(u){
-    // Threats are detected in BOTH directions, even behind a defender.
-    // Prioritize enemies attacking nearby friendly structures.
-    const candidates=this.units.filter(e=>
-      e!==u && e.side!==u.side && e.hp>0 &&
-      (e.lane===u.lane || (u.merged && e.merged)) &&
-      Math.abs(u.x-e.x)<DETECTION_RANGE
-    ).sort((a,b)=>{
-      const defend=enemy=>this.structures.some(s=>s.side===u.side&&s.hp>0&&
-        (s.kind==='castle'||s.lane===u.lane)&&distance(s,enemy)<175);
-      return Number(defend(b))-Number(defend(a)) || distance(u,a)-distance(u,b);
-    });
-    const locked=candidates.find(e=>e.id===u.targetId);
-    const selected=locked??candidates[0];
-    u.targetId=selected?.id??null;
-    return selected??this.getEnemyStructure(u);
+    // Lane combat uses horizontal distance, independent of sprite offsets.
+    // Always acquire nearby enemies on either side before attacking structures.
+    const enemies=this.units.filter(e=>e!==u&&e.hp>0&&e.side!==u.side&&
+      (e.lane===u.lane||(u.merged&&e.merged))&&
+      Math.abs(e.x-u.x)<DETECTION_RANGE);
+    enemies.sort((a,b)=>Math.abs(a.x-u.x)-Math.abs(b.x-u.x));
+    const chosen=enemies.find(e=>e.id===u.targetId)??enemies[0];
+    u.targetId=chosen?.id??null;
+    return chosen??this.getEnemyStructure(u);
   }
 
   moveToward(u,target,dt){
-    const dx=target.x-u.x,dy=target.y-u.y;
-    const len=Math.hypot(dx,dy);
-    if(len<1)return;
-    const step=Math.min(len,u.card.speed*dt);
-    const nextX=u.x+(dx/len)*step;
-    const nextY=u.y+(dy/len)*step;
-    // Do not phase through an enemy: stop at contact and let targeting engage.
-    const blocker=this.units.find(e=>e!==u&&e.side!==u.side&&e.hp>0&&
+    // No diagonal pursuit: troops stay on their lane and never miss an enemy
+    // because of different decorative y offsets.
+    const dx=target.x-u.x;
+    if(Math.abs(dx)<.01)return;
+    const dir=Math.sign(dx),step=Math.min(Math.abs(dx),u.card.speed*dt);
+    const nextX=u.x+dir*step;
+    const blocker=this.units.filter(e=>e!==u&&e.hp>0&&e.side!==u.side&&
       (e.lane===u.lane||(u.merged&&e.merged))&&
-      Math.abs(nextX-e.x)<CONTACT_RANGE && Math.abs(nextY-e.y)<48);
-    if(blocker && target!==blocker){u.targetId=blocker.id;u.facing=blocker.x>=u.x?1:-1;return;}
-    u.x=nextX;u.y=nextY;
+      (e.x-u.x)*dir>=0&&Math.abs(e.x-u.x)<CONTACT_RANGE+step)
+      .sort((a,b)=>Math.abs(a.x-u.x)-Math.abs(b.x-u.x))[0];
+    if(blocker){
+      u.targetId=blocker.id;
+      u.facing=blocker.x>=u.x?1:-1;
+      u.x=blocker.x-dir*CONTACT_RANGE;
+      return;
+    }
+    u.x=nextX;
   }
 
   hit(attacker,target){
     if(target.hp<=0)return;
     target.hp=Math.max(0,target.hp-attacker.card.damage);
-    attacker.flash=.16;
+    attacker.flash=.22;
+    if(attacker.card.type==='melee')this.effects.push({x:attacker.x+attacker.facing*12,y:attacker.y-23,tx:target.x,ty:target.y-23,life:.20,max:.20,color:0xffe7a3});
     if(attacker.card.type!=='melee'){
       this.effects.push({x:attacker.x,y:attacker.y-15,tx:target.x,ty:target.y-10,life:.23,max:.23,color:attacker.card.type==='cannon'?0xffa85e:0xffeea3});
     }
@@ -186,8 +186,8 @@ class Battle extends Phaser.Scene {
         const target=this.targetFor(u);if(!target)continue;
         if(target.kind==='castle'&&this.getEnemyStructure(u)?.kind==='castle')u.merged=true;
         u.facing=target.x>=u.x?1:-1;
-        const d=target.kind ? distance(u,target) : Math.abs(u.x-target.x);
-        const effectiveRange=u.card.type==='melee'?Math.max(48,u.card.range):u.card.range;
+        const d=Math.abs(u.x-target.x);
+        const effectiveRange=u.card.type==='melee'?48:u.card.range;
         if(d>effectiveRange)this.moveToward(u,target,dt);
         else if(u.cd<=0){this.hit(u,target);u.cd=u.card.rate;}
       }
@@ -283,7 +283,7 @@ class Battle extends Phaser.Scene {
       if(this.energy.blue<CARDS[i].cost)ui.fillStyle(0x000000,.38).fillRoundedRect(x-138,513,276,79,10);
     }
     const remaining=Math.max(0,240-this.elapsed);
-    this.header.setText('HISTORICAL ROYALE v0.4   •   '+Math.floor(remaining/60)+':'+String(Math.floor(remaining%60)).padStart(2,'0')+'   •   Energie '+Math.floor(this.energy.blue)+'/10');
+    this.header.setText('HISTORICAL ROYALE v0.5   •   '+Math.floor(remaining/60)+':'+String(Math.floor(remaining%60)).padStart(2,'0')+'   •   Energie '+Math.floor(this.energy.blue)+'/10');
   }
 }
 
