@@ -17,10 +17,23 @@ const DEBUG = new URLSearchParams(location.search).has('debug');
 class Battle extends Phaser.Scene {
   constructor(){super('battle');}
 
+  preload(){
+    this.load.svg('roman-tower',import.meta.env.BASE_URL+'assets/roman-tower.svg',{width:76,height:104});
+    this.load.svg('roman-castle',import.meta.env.BASE_URL+'assets/roman-castle.svg',{width:112,height:142});
+  }
+
   create(){
     this.add.rectangle(W/2,H/2,W,H,0x496e46);
     this.backdrop=this.add.graphics().setDepth(0);
     this.state=createBattle();
+    // Artwork is purely presentational and never participates in collision or combat.
+    this.structureArt=this.state.structures.map(s=>{
+      const castle=s.kind==='castle';
+      const art=this.add.image(s.x,s.y-9,castle?'roman-castle':'roman-tower').setDepth(1.8);
+      art.setDisplaySize(castle?89:55,castle?119:83);
+      if(s.side==='red')art.setTint(0xffb5a6);
+      return art;
+    });
     this.effects=[];              // projectielen en slagen, puur visueel
     this.anim=new Map();          // per eenheid-id: {swing, flash}, puur visueel
     this.accumulator=0;
@@ -153,21 +166,13 @@ class Battle extends Phaser.Scene {
   drawGame(){
     const g=this.visuals;g.clear();
     const state=this.state;
-    for(const s of state.structures){
+    for(const [structureIndex,s] of state.structures.entries()){
+      this.structureArt[structureIndex].setVisible(s.hp>0);
       const col=s.side==='blue'?BLUE:RED;
       const w=s.kind==='castle'?68:43,h=s.kind==='castle'?106:66;
       g.fillStyle(0x283527,.35).fillEllipse(s.x+3,s.y+25,w+14,20);
       if(s.hp>0){
-        g.fillStyle(0xa9a18c).fillRoundedRect(s.x-w/2,s.y-h/2,w,h,5);
-        g.lineStyle(4,0xf3e0b6).strokeRoundedRect(s.x-w/2,s.y-h/2,w,h,5);
-        g.fillStyle(col).fillRoundedRect(s.x-w/2+5,s.y-h/2+7,w-10,24,3);
-        g.fillStyle(0x4e4539).fillRoundedRect(s.x-9,s.y+7,18,h/2-15,8);
-        g.fillStyle(0xe1b768).fillCircle(s.x,s.y-8,7);
-        if(s.kind==='castle'){
-          for(let i=-1;i<=1;i++){
-            g.fillStyle(0xb9aa8a).fillRect(s.x+i*21-9,s.y-h/2-12,17,15);
-          }
-        }
+        // The illustrated SVG underneath replaces the old placeholder geometry.
         // Five visual damage stages based on actual structure HP.
         // These are purely decorative; combat stays in src/sim/.
         const health=Math.max(0,s.hp/s.max);
