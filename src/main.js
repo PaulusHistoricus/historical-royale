@@ -8,12 +8,13 @@ const BLUE = 0x438dcc, RED = 0xc9594a;
 const CARDS = [
   {name:'Legionair',cost:3,hp:240,damage:36,range:35,speed:56,rate:.9,type:'melee'},
   {name:'Boogschutter',cost:4,hp:130,damage:29,range:155,speed:46,rate:1.2,type:'archer'},
-  {name:'Kanon',cost:6,hp:300,damage:105,range:185,speed:26,rate:2.5,type:'cannon'}
+  {name:'Kanon',cost:6,hp:300,damage:48,range:150,speed:22,rate:3.2,type:'cannon'}
 ];
 const clamp = (n,a,b) => Math.max(a, Math.min(b,n));
 const distance = (a,b) => Math.hypot(a.x-b.x,a.y-b.y);
 const DETECTION_RANGE = 205;
-const CONTACT_RANGE = 43;
+const CONTACT_RANGE = 27;
+const DEPLOY_MAX_X = 445;
 
 class Battle extends Phaser.Scene {
   constructor(){super('battle');}
@@ -33,7 +34,7 @@ class Battle extends Phaser.Scene {
       this.structures.push({kind:'castle',side,lane:-1,x:side==='blue'?55:905,y:255,hp:2400,max:2400,cd:0});
     }
     this.drawArena();
-    this.header=this.add.text(W/2,20,'',{fontFamily:'system-ui',fontSize:'19px',fontStyle:'bold',color:'#fdf1d1',stroke:'#2c241b',strokeThickness:4}).setOrigin(.5).setDepth(7);
+    this.header=this.add.text(W/2,65,'',{fontFamily:'system-ui',fontSize:'19px',fontStyle:'bold',color:'#fdf1d1',stroke:'#2c241b',strokeThickness:4}).setOrigin(.5).setDepth(7);
     this.message=this.add.text(W/2,464,'Kies een kaart en klik op de bovenste of onderste baan',{fontFamily:'system-ui',fontSize:'14px',color:'#fff1cb'}).setOrigin(.5).setDepth(7);
     this.buttons=CARDS.map((card,i)=>{
       const x=178+i*302;
@@ -43,10 +44,10 @@ class Battle extends Phaser.Scene {
       return {x,zone};
     });
     this.input.on('pointerdown',p=>{
-      if(this.ended || p.y >= FIELD_BOTTOM || p.y<75 || p.x>470 || p.x<115)return;
+      if(this.ended || p.y >= FIELD_BOTTOM || p.y<75 || p.x>DEPLOY_MAX_X || p.x<205)return;
       const lane=Math.abs(p.y-LANES[0])<=Math.abs(p.y-LANES[1])?0:1;
       if(Math.abs(p.y-LANES[lane])>70)return;
-      if(!this.spawn('blue',lane,this.selected,clamp(p.x,205,420))){
+      if(!this.spawn('blue',lane,this.selected,clamp(p.x,205,DEPLOY_MAX_X))){
         this.message.setText('Niet genoeg energie voor deze kaart');
       } else {
         this.message.setText('Boven en onder verdedigen, daarna samen naar het kasteel!');
@@ -71,6 +72,12 @@ class Battle extends Phaser.Scene {
         g.lineStyle(1,0x907d61,.25).lineBetween(x,y-36,x,y+38);
       }
     }
+    // Blue deployment zones and a visible frontline limit.
+    for(const y of LANES){
+      g.fillStyle(0x4d9ee5,.14).fillRoundedRect(205,y-35,DEPLOY_MAX_X-205,70,8);
+      g.lineStyle(2,0x6bd1ff,.75).strokeRoundedRect(205,y-35,DEPLOY_MAX_X-205,70,8);
+    }
+    g.lineStyle(3,0x8cddff,.85).lineBetween(DEPLOY_MAX_X,106,DEPLOY_MAX_X,396);
     // The two roads visually join near the castles.
     g.lineStyle(24,0xb79c72,.9);
     g.beginPath();g.moveTo(115,LANES[0]);g.lineTo(75,255);g.lineTo(115,LANES[1]);g.strokePath();
@@ -85,8 +92,8 @@ class Battle extends Phaser.Scene {
       g.fillStyle(0x729957).fillCircle(x-8,y-19,15);
     }
     g.lineStyle(4,0x283f30).strokeRoundedRect(5,49,950,436,9);
-    this.add.text(260,102,'BOVENSTE FRONT',{color:'#f6e6c4',fontFamily:'system-ui',fontSize:'12px',fontStyle:'bold'}).setDepth(1);
-    this.add.text(260,303,'ONDERSTE FRONT',{color:'#f6e6c4',fontFamily:'system-ui',fontSize:'12px',fontStyle:'bold'}).setDepth(1);
+    this.add.text(270,110,'BOVENSTE FRONT',{color:'#f6e6c4',fontFamily:'system-ui',fontSize:'12px',fontStyle:'bold'}).setDepth(1);
+    this.add.text(270,310,'ONDERSTE FRONT',{color:'#f6e6c4',fontFamily:'system-ui',fontSize:'12px',fontStyle:'bold'}).setDepth(1);
     this.add.text(23,423,'JOUW KASTEEL',{color:'#d0edff',fontFamily:'system-ui',fontSize:'12px',fontStyle:'bold'}).setDepth(1);
     this.add.text(833,423,'VIJAND',{color:'#ffe1d4',fontFamily:'system-ui',fontSize:'12px',fontStyle:'bold'}).setDepth(1);
   }
@@ -95,7 +102,7 @@ class Battle extends Phaser.Scene {
     const card=CARDS[index];
     if(this.ended || this.energy[side]+.001<card.cost)return false;
     this.energy[side]-=card.cost;
-    const pos=side==='blue'?clamp(x,205,420):clamp(x,540,755);
+    const pos=side==='blue'?clamp(x,205,DEPLOY_MAX_X):clamp(x,540,755);
     const offset=(this.unitId++%3-1)*10;
     this.units.push({id:this.unitId,side,lane,x:pos,y:LANES[lane]+offset,hp:card.hp,max:card.hp,card,cd:0,flash:0,merged:false,facing:side==='blue'?1:-1});
     return true;
@@ -112,13 +119,16 @@ class Battle extends Phaser.Scene {
     const candidates=this.units.filter(e=>
       e!==u && e.side!==u.side && e.hp>0 &&
       (e.lane===u.lane || (u.merged && e.merged)) &&
-      distance(u,e)<DETECTION_RANGE
+      Math.abs(u.x-e.x)<DETECTION_RANGE
     ).sort((a,b)=>{
       const defend=enemy=>this.structures.some(s=>s.side===u.side&&s.hp>0&&
         (s.kind==='castle'||s.lane===u.lane)&&distance(s,enemy)<175);
       return Number(defend(b))-Number(defend(a)) || distance(u,a)-distance(u,b);
     });
-    return candidates[0]??this.getEnemyStructure(u);
+    const locked=candidates.find(e=>e.id===u.targetId);
+    const selected=locked??candidates[0];
+    u.targetId=selected?.id??null;
+    return selected??this.getEnemyStructure(u);
   }
 
   moveToward(u,target,dt){
@@ -131,8 +141,8 @@ class Battle extends Phaser.Scene {
     // Do not phase through an enemy: stop at contact and let targeting engage.
     const blocker=this.units.find(e=>e!==u&&e.side!==u.side&&e.hp>0&&
       (e.lane===u.lane||(u.merged&&e.merged))&&
-      Math.hypot(nextX-e.x,nextY-e.y)<CONTACT_RANGE);
-    if(blocker){u.facing=blocker.x>=u.x?1:-1;return;}
+      Math.abs(nextX-e.x)<CONTACT_RANGE && Math.abs(nextY-e.y)<48);
+    if(blocker && target!==blocker){u.targetId=blocker.id;u.facing=blocker.x>=u.x?1:-1;return;}
     u.x=nextX;u.y=nextY;
   }
 
@@ -176,8 +186,9 @@ class Battle extends Phaser.Scene {
         const target=this.targetFor(u);if(!target)continue;
         if(target.kind==='castle'&&this.getEnemyStructure(u)?.kind==='castle')u.merged=true;
         u.facing=target.x>=u.x?1:-1;
-        const d=distance(u,target);
-        if(d>u.card.range)this.moveToward(u,target,dt);
+        const d=target.kind ? distance(u,target) : Math.abs(u.x-target.x);
+        const effectiveRange=u.card.type==='melee'?Math.max(48,u.card.range):u.card.range;
+        if(d>effectiveRange)this.moveToward(u,target,dt);
         else if(u.cd<=0){this.hit(u,target);u.cd=u.card.rate;}
       }
       for(const s of this.structures){
@@ -264,6 +275,7 @@ class Battle extends Phaser.Scene {
     ui.lineStyle(3,0xc9a96a).lineBetween(0,FIELD_BOTTOM,W,FIELD_BOTTOM);
     ui.fillStyle(0x4d3c61).fillRoundedRect(18,493,924,13,5);
     ui.fillStyle(0xc58bed).fillRoundedRect(18,493,924*this.energy.blue/10,13,5);
+    this.message.setColor('#fff1cb');
     for(let i=0;i<CARDS.length;i++){
       const x=this.buttons[i].x;
       ui.fillStyle(i===this.selected?0x786344:0x3a4844).fillRoundedRect(x-138,513,276,79,10);
@@ -271,7 +283,7 @@ class Battle extends Phaser.Scene {
       if(this.energy.blue<CARDS[i].cost)ui.fillStyle(0x000000,.38).fillRoundedRect(x-138,513,276,79,10);
     }
     const remaining=Math.max(0,240-this.elapsed);
-    this.header.setText('HISTORICAL ROYALE   •   '+Math.floor(remaining/60)+':'+String(Math.floor(remaining%60)).padStart(2,'0')+'   •   Energie '+Math.floor(this.energy.blue)+'/10');
+    this.header.setText('HISTORICAL ROYALE v0.4   •   '+Math.floor(remaining/60)+':'+String(Math.floor(remaining%60)).padStart(2,'0')+'   •   Energie '+Math.floor(this.energy.blue)+'/10');
   }
 }
 
