@@ -18,6 +18,9 @@ class Battle extends Phaser.Scene {
   constructor(){super('battle');}
 
   preload(){
+    // Sprite atlas is optional until the extracted PNG is uploaded; silhouettes remain as fallback.
+    this.load.on('loaderror', file=>{ if(file.key==='legionary-sheet')this.legionarySpriteUnavailable=true; });
+    this.load.spritesheet('legionary-sheet',import.meta.env.BASE_URL+'assets/legionary-sheet.png',{frameWidth:96,frameHeight:108});
     this.load.svg('roman-landscape',import.meta.env.BASE_URL+'assets/roman-landscape.svg',{width:960,height:440});
     this.load.svg('roman-tower',import.meta.env.BASE_URL+'assets/roman-tower.svg',{width:76,height:104});
     this.load.svg('roman-castle',import.meta.env.BASE_URL+'assets/roman-castle.svg',{width:112,height:142});
@@ -36,6 +39,7 @@ class Battle extends Phaser.Scene {
       if(s.side==='red')art.setTint(0xffb5a6);
       return art;
     });
+    this.legionaryArt=new Map();
     this.effects=[];              // projectielen en slagen, puur visueel
     this.anim=new Map();          // per eenheid-id: {swing, flash}, puur visueel
     this.accumulator=0;
@@ -207,11 +211,24 @@ class Battle extends Phaser.Scene {
     }
     const units=[...state.units].sort((a,b)=>a.y-b.y);
     for(const u of units){
+      const isLegionary=u.card.type==='melee';
+      const canUseSprite=isLegionary&&!this.legionarySpriteUnavailable&&this.textures.exists('legionary-sheet');
+      let sprite=this.legionaryArt.get(u.id);
+      if(canUseSprite){
+        if(!sprite){sprite=this.add.image(u.x,u.y-15,'legionary-sheet',0).setDepth(3);this.legionaryArt.set(u.id,sprite);}
+        sprite.setPosition(u.x,u.y-15).setFlipX(u.facing<0).setTint(u.side==='blue'?0xb5d9ff:0xffffff);
+        const swing=this.anim.get(u.id)?.swing??0;
+        const phase=swing>0?2:Math.floor(this.state.time*8)%2;
+        sprite.setFrame(phase).setVisible(true);
+      }else if(sprite){sprite.setVisible(false);}
+
       const c=u.card,dir=u.facing;
       const swing=this.anim.get(u.id)?.swing??0,flash=this.anim.get(u.id)?.flash??0;
       const sideColor=u.side==='blue'?BLUE:RED;
       g.fillStyle(0x253827,.45).fillEllipse(u.x,u.y+14,c.type==='cannon'?47:34,10);
-      if(c.type==='cannon'){
+      if(canUseSprite){
+        // Unit body is rendered by the painted sprite; health and hit feedback remain below.
+      } else if(c.type==='cannon'){
         g.fillStyle(0x6a6051).fillRoundedRect(u.x-21,u.y-8,44,20,4);
         g.fillStyle(0x2d3336).fillCircle(u.x-13,u.y+13,10).fillCircle(u.x+13,u.y+13,10);
         g.lineStyle(9,0xc5a056).lineBetween(u.x,u.y-3,u.x+dir*30,u.y-10);
@@ -239,6 +256,7 @@ class Battle extends Phaser.Scene {
       g.fillStyle(0x292929).fillRect(u.x-19,u.y-51,38,6);
       g.fillStyle(sideColor).fillRect(u.x-19,u.y-51,38*(u.hp/u.max),6);
     }
+    for(const [id,sprite] of this.legionaryArt){if(!state.units.some(u=>u.id===id)){sprite.destroy();this.legionaryArt.delete(id);}}
     for(const e of this.effects){
       g.lineStyle(e.color===0xffa85e?6:3,e.color,Math.min(1,e.life/e.max));
       g.lineBetween(e.x,e.y,e.tx,e.ty);
