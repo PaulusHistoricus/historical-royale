@@ -180,7 +180,7 @@ class Battle extends Phaser.Scene {
         g.lineStyle(3,0xd9d9d2).lineBetween(x+9,y,x+18,y+(blue?-12:12));
       } else if(c.kind==='ranged'){
         g.fillStyle(0xbca57b).fillCircle(x,y-5,7);
-        g.lineStyle(3,0xd9aa67).strokeArc(x+10,y,9,-1.2,1.2);
+        g.lineStyle(3,0xd9aa67); g.arc(x+10,y,9,-1.2,1.2,false);g.strokePath();
       } else {
         g.fillStyle(0x4e5154).fillRoundedRect(x-13,y-8,26,20,4);
         g.lineStyle(8,0xa68a53).lineBetween(x,y,x,y+(blue?-24:24));
@@ -190,7 +190,7 @@ class Battle extends Phaser.Scene {
       g.fillStyle(blue?0x59d4f2:0xf67b74).fillRect(x-17,y-29,34*u.hp/u.max,4);
     }
     for(const e of this.effects){
-      g.lineStyle(e.life>0?.18?3:2,e.color,Math.min(1,e.life*4));
+      g.lineStyle(e.life>0.1?3:2,e.color,Math.min(1,e.life*4));
       g.lineBetween(e.x,e.y,e.tx,e.ty);
       g.fillStyle(e.color).fillCircle(e.tx,e.ty,5);
     }
