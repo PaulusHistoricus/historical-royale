@@ -14,6 +14,7 @@ const clamp = (n,a,b) => Math.max(a, Math.min(b,n));
 const distance = (a,b) => Math.hypot(a.x-b.x,a.y-b.y);
 const DETECTION_RANGE = 205;
 const CONTACT_RANGE = 27;
+const MELEE_ENGAGE_RANGE = 66;
 const DEPLOY_MAX_X = 445;
 
 class Battle extends Phaser.Scene {
@@ -145,11 +146,21 @@ class Battle extends Phaser.Scene {
     u.x=nextX;
   }
 
+  meleeOpponent(u){
+    return this.units.filter(e=>e!==u&&e.hp>0&&e.side!==u.side&&
+      (e.lane===u.lane||(u.merged&&e.merged))&&
+      Math.abs(e.x-u.x)<=MELEE_ENGAGE_RANGE)
+      .sort((a,b)=>Math.abs(a.x-u.x)-Math.abs(b.x-u.x))[0];
+  }
+
   hit(attacker,target){
     if(target.hp<=0)return;
     target.hp=Math.max(0,target.hp-attacker.card.damage);
     attacker.flash=.22;
-    if(attacker.card.type==='melee')this.effects.push({x:attacker.x+attacker.facing*12,y:attacker.y-23,tx:target.x,ty:target.y-23,life:.20,max:.20,color:0xffe7a3});
+    if(attacker.card.type==='melee'){
+      this.effects.push({x:attacker.x+attacker.facing*12,y:attacker.y-23,tx:target.x,ty:target.y-23,life:.32,max:.32,color:0xffe7a3});
+      attacker.swing=.32;
+    }
     if(attacker.card.type!=='melee'){
       this.effects.push({x:attacker.x,y:attacker.y-15,tx:target.x,ty:target.y-10,life:.23,max:.23,color:attacker.card.type==='cannon'?0xffa85e:0xffeea3});
     }
@@ -182,7 +193,17 @@ class Battle extends Phaser.Scene {
       }
       for(const u of this.units){
         if(u.hp<=0)continue;
-        u.cd-=dt;u.flash=Math.max(0,u.flash-dt);
+        u.cd-=dt;u.flash=Math.max(0,u.flash-dt);u.swing=Math.max(0,(u.swing??0)-dt);
+        // Independent melee resolution: close enemies ALWAYS fight, even
+        // when they are behind a unit or its movement is blocked.
+        if(u.card.type==='melee'){
+          const opponent=this.meleeOpponent(u);
+          if(opponent){
+            u.facing=opponent.x>=u.x?1:-1;
+            if(u.cd<=0){this.hit(u,opponent);u.cd=u.card.rate;}
+            continue;
+          }
+        }
         const target=this.targetFor(u);if(!target)continue;
         if(target.kind==='castle'&&this.getEnemyStructure(u)?.kind==='castle')u.merged=true;
         u.facing=target.x>=u.x?1:-1;
@@ -254,6 +275,10 @@ class Battle extends Phaser.Scene {
         g.lineStyle(5,0x544539).lineBetween(u.x-8,u.y+10,u.x-10,u.y+18);
         g.lineBetween(u.x+8,u.y+10,u.x+11,u.y+18);
         if(c.type==='melee'){
+          if(u.swing>0){
+            g.lineStyle(5,0xffe9a1,Math.min(1,u.swing/.16));
+            g.beginPath();g.arc(u.x+dir*16,u.y-19,24,dir>0?-.9:2.1,dir>0?1.1:4.1,false);g.strokePath();
+          }
           g.fillStyle(0xb6a577).fillRoundedRect(u.x+dir*14-8,u.y-19,12,26,3);
           g.lineStyle(4,0xe4dfc9).lineBetween(u.x-dir*11,u.y-14,u.x-dir*22,u.y-30);
         }else{
@@ -283,7 +308,7 @@ class Battle extends Phaser.Scene {
       if(this.energy.blue<CARDS[i].cost)ui.fillStyle(0x000000,.38).fillRoundedRect(x-138,513,276,79,10);
     }
     const remaining=Math.max(0,240-this.elapsed);
-    this.header.setText('HISTORICAL ROYALE v0.5   •   '+Math.floor(remaining/60)+':'+String(Math.floor(remaining%60)).padStart(2,'0')+'   •   Energie '+Math.floor(this.energy.blue)+'/10');
+    this.header.setText('HISTORICAL ROYALE v0.6   •   '+Math.floor(remaining/60)+':'+String(Math.floor(remaining%60)).padStart(2,'0')+'   •   Energie '+Math.floor(this.energy.blue)+'/10');
   }
 }
 
