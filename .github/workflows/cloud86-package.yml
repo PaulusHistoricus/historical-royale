@@ -1,0 +1,47 @@
+name: Cloud86 upload ZIP
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/cloud86-package.yml'
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.js'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Build for Cloud86 subdomain root
+        run: npx vite build --base=/
+      - name: Verify deploy files
+        run: |
+          test -f dist/index.html
+          test -f dist/version.json
+          test -d dist/assets
+          if grep -q '/historical-royale/' dist/index.html; then
+            echo "Wrong base URL for Cloud86" >&2
+            exit 1
+          fi
+      - name: Upload website files as ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: legionroyale-cloud86-upload
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
