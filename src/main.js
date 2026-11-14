@@ -18,12 +18,14 @@ class Battle extends Phaser.Scene {
   constructor(){super('battle');}
 
   preload(){
+    this.load.svg('roman-landscape',import.meta.env.BASE_URL+'assets/roman-landscape.svg',{width:960,height:440});
     this.load.svg('roman-tower',import.meta.env.BASE_URL+'assets/roman-tower.svg',{width:76,height:104});
     this.load.svg('roman-castle',import.meta.env.BASE_URL+'assets/roman-castle.svg',{width:112,height:142});
   }
 
   create(){
     this.add.rectangle(W/2,H/2,W,H,0x496e46);
+    this.add.image(0,48,'roman-landscape').setOrigin(0,0).setDepth(-1);
     this.backdrop=this.add.graphics().setDepth(0);
     this.state=createBattle();
     // Artwork is purely presentational and never participates in collision or combat.
@@ -71,11 +73,6 @@ class Battle extends Phaser.Scene {
   drawArena(){
     const g=this.backdrop;
     // Flat side-on lanes separated by scenery, with a shared endpoint at each castle.
-    g.fillStyle(0x6e965a).fillRect(0,48,W,FIELD_BOTTOM-48);
-    for(let i=0;i<65;i++){
-      const x=(i*149+47)%W,y=62+(i*193)%(FIELD_BOTTOM-68);
-      g.fillStyle(i%2?0x527944:0x83a45d,.4).fillCircle(x,y,3+i%6);
-    }
     for(const y of LANES){
       g.fillStyle(0x9c8769).fillRoundedRect(100,y-42,760,88,19);
       g.fillStyle(0xc4ab82).fillRoundedRect(100,y-37,760,77,17);
@@ -97,12 +94,6 @@ class Battle extends Phaser.Scene {
     g.lineStyle(16,0xd6b88a,.8);
     g.beginPath();g.moveTo(115,LANES[0]);g.lineTo(75,255);g.lineTo(115,LANES[1]);g.strokePath();
     g.beginPath();g.moveTo(845,LANES[0]);g.lineTo(885,255);g.lineTo(845,LANES[1]);g.strokePath();
-    // Ruins, trees and distant walls, painted with simple shapes for now.
-    for(const [x,y] of [[280,70],[365,72],[576,69],[665,74],[312,283],[635,274]]){
-      g.fillStyle(0x567b4a).fillEllipse(x,y+13,60,18);
-      g.fillStyle(0x31583c).fillCircle(x,y-10,18);
-      g.fillStyle(0x729957).fillCircle(x-8,y-19,15);
-    }
     g.lineStyle(4,0x283f30).strokeRoundedRect(5,49,950,436,9);
     this.add.text(270,110,'BOVENSTE FRONT',{color:'#f6e6c4',fontFamily:'system-ui',fontSize:'12px',fontStyle:'bold'}).setDepth(1);
     this.add.text(270,310,'ONDERSTE FRONT',{color:'#f6e6c4',fontFamily:'system-ui',fontSize:'12px',fontStyle:'bold'}).setDepth(1);
