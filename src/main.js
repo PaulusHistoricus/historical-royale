@@ -30,6 +30,39 @@ const ART = import.meta.env.BASE_URL + 'assets/art/';
 // Art staat in public/ en heeft geen hash in de bestandsnaam. Het ?v=<build>-achtervoegsel
 // dwingt browsers na elke update de nieuwe versie op te halen (anders: verschoven kaarten e.d.).
 const art = file => ART + file + '?v=' + BUILD;
+
+// ---- Geluid (bestanden: tools/audio/build.sh) ----
+const AUDIO = import.meta.env.BASE_URL + 'assets/audio/';
+const SFX_FILES = ['sword-1', 'sword-2', 'sword-3', 'axe', 'death-male-1', 'death-male-2', 'death-collapse',
+  'death-female-1', 'death-female-2', 'death-female-3', 'musket', 'machine-gun', 'explosion', 'heal', 'magic-wind'];
+const MUSIC = { menu: 'music-2', battle: ['music-1', 'music-3'] };
+const SFX = {   // groep -> [bestanden, volume, minimale tijd tussen twee keer (ms)]
+  sword: [['sword-1', 'sword-2', 'sword-3'], 0.45, 70],
+  axe: [['axe'], 0.5, 120],
+  deathMale: [['death-male-1', 'death-male-2', 'death-collapse'], 0.5, 150],
+  deathFemale: [['death-female-1', 'death-female-2', 'death-female-3'], 0.5, 150],
+  musket: [['musket'], 0.5, 60],
+  mg: [['machine-gun'], 0.55, 300],
+  boom: [['explosion'], 0.45, 90],
+  heal: [['heal'], 0.35, 450],
+  magic: [['magic-wind'], 0.4, 400],
+};
+const FEMALE = new Set(['healer', 'spy']);
+const lastPlayed = {};
+function sfx(scene, group, volume = 1) {
+  const [files, vol, gap] = SFX[group], now = performance.now();
+  if (scene.sound.locked || now - (lastPlayed[group] ?? 0) < gap) return;
+  lastPlayed[group] = now;
+  scene.sound.play(files[Math.floor(Math.random() * files.length)],
+    { volume: vol * volume, detune: (Math.random() - 0.5) * 160 });   // kleine toonvariatie
+}
+function playMusic(scene, key) {
+  const cur = window.__music;
+  if (cur && cur.key === key && cur.isPlaying) return;
+  cur?.stop(); cur?.destroy();
+  window.__music = scene.sound.add(key, { loop: true, volume: 0.32 });
+  window.__music.play();
+}
 const SIM_STEP = 1 / 60;            // vaste simulatiestap, onafhankelijk van de framerate
 const TEAM = { blue: 0x4f9be8, red: 0xe0513f };
 const ZONE = DEPLOY_ZONE.blue;
@@ -89,6 +122,7 @@ class Boot extends Phaser.Scene {
     }
     this.load.image('menu-bg', art('menu-bg.webp'));
     for (const key of Object.keys(SCREEN_ART)) this.load.image(key, art(key + '.webp'));
+    for (const key of [...SFX_FILES, MUSIC.menu, ...MUSIC.battle]) this.load.audio(key, AUDIO + key + '.mp3?v=' + BUILD);
   }
 
   create() {
@@ -122,6 +156,7 @@ class Menu extends Phaser.Scene {
 
   create() {
     window.dispatchEvent(new Event('lr:menu'));
+    playMusic(this, MUSIC.menu);
     this.bg = this.add.image(0, 0, 'menu-bg');
     this.chars = ['menu-healer', 'menu-legionary', 'menu-samurai', 'menu-pilot'].map(k => this.add.image(0, 0, k).setOrigin(0.5, 1));
     this.titlePlate = this.add.image(0, 0, 'menu-title');
@@ -251,6 +286,8 @@ class Battle extends Phaser.Scene {
 
   create() {
     window.dispatchEvent(new Event('lr:battle'));
+    playMusic(this, MUSIC.battle[Math.floor(Math.random() * MUSIC.battle.length)]);
+    this.vanishing = new Set();      // spionnen die na een overname gewoon verdwijnen
     this.texts = [];
     this.state = createBattle();
     this.accumulator = 0;
@@ -416,8 +453,8 @@ class Battle extends Phaser.Scene {
     if (this.state.ended && on) return;
     this.paused = on;
     this.pauseLayer.setVisible(on);
-    if (on) { this.anims.pauseAll(); this.tweens.pauseAll(); this.selected = null; }
-    else { this.anims.resumeAll(); this.tweens.resumeAll(); }
+    if (on) { this.anims.pauseAll(); this.tweens.pauseAll(); this.selected = null; window.__music?.pause(); }
+    else { this.anims.resumeAll(); this.tweens.resumeAll(); window.__music?.resume(); }
   }
 
   createFullscreenButton() {
@@ -506,6 +543,7 @@ class Battle extends Phaser.Scene {
     const now = this.time.now;
     for (const e of events) {
       if (e.type === 'heal') {
+        sfx(this, 'heal');
         const healer = this.views.get(e.attackerId);
         if (healer) {
           healer.sprite.anims.play(`${healer.sprite.texture.key}:heal`);
@@ -520,6 +558,7 @@ class Battle extends Phaser.Scene {
           .setOrigin(0.5).setDepth(1020).setResolution(clamp(Math.ceil(this.view.zoom), 1, 4));
         this.tweens.add({ targets: plus, y: plus.y - 18, alpha: 0, duration: 900, onComplete: () => plus.destroy() });
       } else if (e.type === 'cloak') {
+        sfx(this, 'magic', 0.5);
         const v = this.views.get(e.id);
         if (v) {
           v.revealed = false;                       // volgende klap = reveal strike
@@ -528,6 +567,8 @@ class Battle extends Phaser.Scene {
           v.cloaking = v.lockUntil;
         }
       } else if (e.type === 'possess') {
+        this.vanishing.add(e.spyId);
+        sfx(this, 'magic', 0.8);
         const target = this.state.units.find(u => u.id === e.targetId);
         this.sparks.push({ x: e.x, y: (target ? footY(target) : e.y) - 30, t: 0, dur: 0.7, color: 0xff7ad9, heal: true });
       } else if (e.type === 'hit') {
@@ -552,9 +593,16 @@ class Battle extends Phaser.Scene {
           if (sv) sv.flashUntil = now + 110;
         }
         this.spawnEffect(e);
+        if (e.kind === 'berserker') sfx(this, 'axe');
+        else if (MELEE_KINDS.has(e.kind)) sfx(this, 'sword');
+        else if (e.kind === 'musket') sfx(this, 'musket');
       } else if (e.type === 'death') {
         const view = this.views.get(e.id);
-        if (view) {
+        if (view && this.vanishing.has(e.id)) {   // spion na overname: geen sterfscène, gewoon weg
+          this.views.delete(e.id);
+          this.tweens.add({ targets: view.sprite, alpha: 0, scale: view.sprite.scale * 0.9, duration: 350, onComplete: () => view.sprite.destroy() });
+        } else if (view) {
+          sfx(this, FEMALE.has(view.type) ? 'deathFemale' : 'deathMale');
           this.views.delete(e.id);
           view.burn?.destroy();
           if (view.sprite) {
@@ -774,10 +822,12 @@ class Battle extends Phaser.Scene {
         g.fillStyle(0x8a8580).fillCircle(x - 1, y - 1, 1.2);
       }
       if (k >= 1 && p.kind === 'pot') {
+        sfx(this, 'boom', 0.55);
         this.add.sprite(p.x1, p.y1 + 30, 'fx-fire').setOrigin(0.5, 1).setScale(0.42).setDepth(p.y1 + 40)
           .setBlendMode(Phaser.BlendModes.ADD).play('fx-fire:burst').once('animationcomplete', (_a, _f, spr) => spr.destroy());
         return false;
       }
+      if (k >= 1 && p.kind === 'ball') sfx(this, 'boom');
       if (k >= 1) {
         this.sparks.push(p.kind === 'ball'
           ? { x: p.x1, y: p.y1 + 8, t: 0, dur: 0.38, color: 0xffa040, big: true }
@@ -829,6 +879,7 @@ class Battle extends Phaser.Scene {
       const y = LANES[strike.lane] - 64 - Math.sin(fraction * Math.PI) * 10;
       let plane = this.planes.get(strike.id);
       if (!plane) {
+        sfx(this, 'mg');
         plane = this.add.sprite(x, y, `p51-${strike.side}`, 1).setScale(0.55).setDepth(900).setFlipX(strike.side === 'red');
         this.planes.set(strike.id, plane);
       }
