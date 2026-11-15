@@ -33,7 +33,7 @@ Lees dit voordat je iets aan Historical Royale wijzigt.
 - `{type:'destroyed', id, kind, side}`
 - `{type:'end', winner}`
 
-Scènes (v0.12): `Boot` laadt alle art (voortgang op het laadscherm in `index.html`) en maakt de animaties → `Menu` (losse elementen, alleen Spelen werkt) → `Battle`. `?play` slaat het menu over.
+Scènes (v0.12): `Boot` laadt alle art (voortgang op het laadscherm in `index.html`) en maakt de animaties → `Menu` (losse elementen, alleen Spelen werkt) → `Battle`. `?play` slaat het menu over. Elk gevecht begint met 5 s aftelling (`COUNTDOWN`); de simulatie staat dan stil en kaarten spelen kan nog niet (`?debug=1&nowait` slaat over). Op touchscreens rechtop toont `index.html` 'Draai je toestel': het spel is altijd liggend.
 
 Zo werkt de weergave nu:
 

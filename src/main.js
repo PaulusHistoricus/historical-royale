@@ -31,6 +31,7 @@ const TEAM = { blue: 0x4f9be8, red: 0xe0513f };
 const ZONE = DEPLOY_ZONE.blue;
 const FONT = 'Georgia, "Times New Roman", serif';
 const DEBUG = new URLSearchParams(location.search).has('debug');
+const COUNTDOWN = 5;                // seconden kijktijd voordat het gevecht begint
 const BAR_OVERLAP = 266;            // bovenrand kaartenbalk; banen en kastelen eindigen erboven
 const PORTRAIT_TOP = 120;           // kopstrook in portret
 const BAR_MAX_LANDSCAPE = 0.33;     // balkschaal liggend/desktop: balk ≈ 30% van de hoogte, veld ≈ 70%
@@ -254,6 +255,13 @@ class Battle extends Phaser.Scene {
       const slot = Number(e.key) - 1;                  // toetsen 1-4 kiezen een kaart
       if (slot >= 0 && slot < HAND_SIZE) this.selectSlot(slot);
     });
+    // Aftelling: het veld is zichtbaar, maar de simulatie (energie, AI, eenheden) staat stil.
+    this.countdown = DEBUG && new URLSearchParams(location.search).has('nowait') ? 0 : COUNTDOWN;
+    if (this.countdown > 0) this.message.setText('Look at the battlefield…');
+    this.countText = this.add.text(W / 2, FIELD_BOTTOM / 2 - 20, '', textStyle(64, '#ffe08a', { strokeThickness: 10 }))
+      .setOrigin(0.5).setDepth(2500);
+    this.texts.push(this.countText);
+    this.countSub = this.text(W / 2, FIELD_BOTTOM / 2 + 30, 'Battle starts in', 14, '#f5e6c4').setOrigin(0.5).setDepth(2500);
     ensureLatestBuild().then(status => {
       if (status === 'stale') this.message.setText('New version available — refresh the page');
     });
@@ -264,6 +272,7 @@ class Battle extends Phaser.Scene {
   }
 
   tryDeploy(x, y) {
+    if (this.countdown > 0) { this.message.setText('Wait for the battle to start'); return; }
     if (y >= FIELD_BOTTOM || y < 40 || x < ZONE.min || x > ZONE.max) return;
     const lane = Math.abs(y - LANES[0]) <= Math.abs(y - LANES[1]) ? 0 : 1;
     if (Math.abs(y - LANES[lane]) > 48) return;
@@ -508,7 +517,22 @@ class Battle extends Phaser.Scene {
 
   update(_time, delta) {
     const dt = Math.min(delta / 1000, 0.1);
-    this.accumulator += dt;
+    if (this.countdown > 0) {
+      const before = Math.ceil(this.countdown);
+      this.countdown = Math.max(0, this.countdown - dt);
+      const n = Math.ceil(this.countdown);
+      if (n > 0) {
+        this.countText.setText(String(n));
+        if (n !== before || !this.countText.scaleBase) { this.countText.scaleBase = 1; this.tweens.add({ targets: this.countText, scale: { from: 1.5, to: 1 }, duration: 300, ease: 'Back.easeOut' }); }
+      } else {
+        this.countSub.setVisible(false);
+        this.countText.setText('FIGHT!').setScale(1.4);
+        this.tweens.add({ targets: this.countText, scale: 1, alpha: 0, delay: 500, duration: 500 });
+        this.message.setText('Choose a card, then select a blue lane');
+      }
+    } else {
+      this.accumulator += dt;
+    }
     while (this.accumulator >= SIM_STEP) {
       this.accumulator -= SIM_STEP;
       this.syncUnitViews();        // nieuwe eenheden krijgen een sprite vóór hun eerste klap
