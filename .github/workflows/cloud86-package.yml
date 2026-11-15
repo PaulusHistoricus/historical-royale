@@ -7,6 +7,7 @@ on:
       - '.github/workflows/cloud86-package.yml'
       - 'src/**'
       - 'public/**'
+      - 'private/**'
       - 'index.html'
       - 'package.json'
       - 'package-lock.json'
@@ -41,40 +42,40 @@ jobs:
           fi
           mkdir -p cloud86-package/public cloud86-package/private
           cp -a dist/. cloud86-package/public/
+          cp private/legionroyale.example.php cloud86-package/private/legionroyale.example.php
           cat > cloud86-package/private/README.txt <<'EOF'
-          LEGION ROYALE - PRIVATE
-          This directory is reserved for future server code, account data,
-          session storage and secrets. There is no login system yet.
-          Never expose this directory through a web server.
-          Do not store real credentials in the GitHub repository or this ZIP.
+          LEGION ROYALE - PRIVATE CONFIGURATION
+          Before login works, create a file named legionroyale.php
+          in this PRIVATE folder by copying legionroyale.example.php.
+          Replace placeholders with the real database and Google OAuth credentials.
+          NEVER upload private/ into httpdocs or place real secrets on GitHub.
+          See docs/auth-deployment.md in the source repository.
           EOF
           cat > cloud86-package/UPLOAD-INSTRUCTIES.txt <<'EOF'
           LEGION ROYALE - CLOUD86 / PLESK
 
-          Intended website: https://legionroyale.paulushistoricus.nl/
+          Deploy to https://legionroyale.paulushistoricus.nl/
 
-          Package structure:
-              public/   Ready-built browser game (index.html + assets)
-              private/  Reserved for later authentication / server components
+          1. Upload the CONTENTS of public/ to the subdomain httpdocs/ folder,
+             replacing the previous index.html, assets/ and api/ files.
+          2. Put private/ NEXT TO httpdocs, NEVER INSIDE it.
+          3. Inside the server's private/ folder create legionroyale.php using
+             legionroyale.example.php as a template. Set REAL credentials there.
+             There is no sensitive secret in this downloadable ZIP.
+          4. Import database/schema.sql in Plesk phpMyAdmin. The schema is
+             in the GitHub repository, not in this public web folder.
+          5. Create an OAuth Web client in Google Cloud:
+             Redirect URI (exact):
+             https://legionroyale.paulushistoricus.nl/api/google-callback.php
+          6. Check https://legionroyale.paulushistoricus.nl/api/me.php
+             returns JSON, not downloadable PHP code.
+          7. See docs/auth-deployment.md for full installation and safety notes.
 
-          IMPORTANT: The web document root must point ONLY at public/.
-          The private/ folder must be OUTSIDE the web document root.
+          Google login is NOT ACTIVE until database, configuration and
+          Google OAuth consent screen are set up.
+          The game currently plays against AI; PvP WebSockets are NOT live.
 
-          In Plesk:
-          1. Open the subdomain legionroyale.paulushistoricus.nl.
-          2. Set the document root to public/ if your hosting configuration
-             allows this and put both folders under the subdomain home folder.
-          3. Otherwise: upload ONLY THE CONTENTS of public/ into httpdocs/;
-             create private/ next to httpdocs/, not inside it.
-          4. Use Plesk File Manager to upload and extract the ZIP.
-          5. Enable HTTPS / Let's Encrypt and then open the subdomain.
-
-          The game is static. There is currently NO user registration,
-          login endpoint, password storage or database. Those must be built
-          and secured separately before adding real accounts.
-
-          Source of truth: github.com/PaulusHistoricus/historical-royale
-          Rebuild and redeploy after changes on GitHub.
+          Source: github.com/PaulusHistoricus/historical-royale
           EOF
       - name: Upload ready-to-place Cloud86 package
         uses: actions/upload-artifact@v4
