@@ -140,6 +140,16 @@ class Menu extends Phaser.Scene {
     });
     this.toast = this.add.text(0, 0, '', { fontFamily: FONT, fontStyle: 'bold', color: '#fff4d6', stroke: '#2a1d10',
       backgroundColor: '#1b130bcc', padding: { x: 14, y: 8 } }).setOrigin(0.5).setDepth(10).setAlpha(0);
+    // Installeren: knop alleen als het kan (Android/desktop) of als uitleg nodig is (iPhone/iPad).
+    const standalone = matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches || navigator.standalone;
+    this.isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    this.install = this.add.text(0, 0, '⬇  INSTALL APP', { fontFamily: FONT, fontStyle: 'bold', color: '#ffe9a6', stroke: '#2a1d10',
+      backgroundColor: '#3b2a18ee', padding: { x: 14, y: 8 } }).setOrigin(0, 1).setInteractive({ useHandCursor: true })
+      .setVisible(!standalone && (this.isIOS || !!window.__install?.prompt));
+    this.install.on('pointerdown', () => this.installApp());
+    this.time.addEvent({ delay: 800, loop: true, callback: () => {
+      if (!standalone && !this.install.visible && window.__install?.prompt) this.install.setVisible(true);
+    } });
     this.version = this.add.text(0, 0, VERSION_LABEL, { fontFamily: FONT, color: '#f5e6c4', stroke: '#000', strokeThickness: 3 }).setOrigin(1, 1);
     this.scale.on('resize', this.layout, this);
     this.events.once('shutdown', () => this.scale.off('resize', this.layout, this));
@@ -159,6 +169,20 @@ class Menu extends Phaser.Scene {
     this.toast.setText('Coming soon').setAlpha(1);
     this.tweens.killTweensOf(this.toast);
     this.tweens.add({ targets: this.toast, alpha: 0, delay: 1100, duration: 400 });
+  }
+
+  async installApp() {
+    const p = window.__install?.prompt;
+    if (p) {
+      p.prompt();
+      const { outcome } = await p.userChoice;
+      window.__install.prompt = null;
+      if (outcome === 'accepted') this.install.setVisible(false);
+      return;
+    }
+    this.toast.setText(this.isIOS ? 'Tap Share  ⎙  then "Add to Home Screen"' : 'Use your browser menu: "Install app"').setAlpha(1);
+    this.tweens.killTweensOf(this.toast);
+    this.tweens.add({ targets: this.toast, alpha: 0, delay: 3500, duration: 500 });
   }
 
   toggleSound() {
@@ -207,8 +231,9 @@ class Menu extends Phaser.Scene {
       c.setVisible(show).setScale(ch / c.height).setPosition(w * fx, h + 2).setFlipX(false);
     }
     this.toast.setPosition(w / 2, h * 0.92).setFontSize(Math.max(16, Math.round(h * 0.03)));
+    this.install.setPosition(12, h - 12).setFontSize(Math.max(14, Math.round(h * 0.026)));
     this.version.setPosition(w - 10, h - 8).setFontSize(Math.max(11, Math.round(h * 0.018)));
-    for (const t of [this.title, this.toast, this.version]) t.setResolution(1);
+    for (const t of [this.title, this.toast, this.version, this.install]) t.setResolution(1);
   }
 }
 
