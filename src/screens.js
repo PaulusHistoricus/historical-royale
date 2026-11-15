@@ -304,6 +304,9 @@ if (changeToken) {
 
 window.addEventListener('lr:open', e => ({ profile: () => showProfile(), achievements: () => showProfile('achievements'),
   deck: showDeck, friends: showFriends })[e.detail]?.());
-window.addEventListener('lr:result', e => showResult(e.detail));
+window.addEventListener('lr:result', e => {
+  try { showResult(e.detail); }
+  catch (err) { console.error('result screen', err); showResult({ winner: e.detail.winner, error: 'Rewards could not be shown.' }); }
+});
 window.addEventListener('lr:battle', () => { if (current && current !== 'result') close(); });
 export const screens = { toast, isOpen: () => current !== null };

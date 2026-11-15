@@ -616,8 +616,16 @@ class Battle extends Phaser.Scene {
 
   // Vertaalt gebeurtenissen uit de simulatie naar animaties en effecten.
   handleEvents(events) {
-    const now = this.time.now;
+    // Eén fout in een effect mag nooit de rest (zoals het einde van het gevecht) blokkeren.
     for (const e of events) {
+      try { this.handleEvent(e); } catch (err) { console.error('event', e.type, err); }
+      if (e.type === 'end') this.showResult(e.winner);
+    }
+  }
+
+  handleEvent(e) {
+    const now = this.time.now;
+    {
       if (e.type === 'heal') {
         sfx(this, 'heal');
         const healer = this.views.get(e.attackerId);
@@ -714,8 +722,6 @@ class Battle extends Phaser.Scene {
         this.cameras.main.shake(380, 0.006);
         const i = this.state.structures.findIndex(s => s.id === e.id);
         if (i >= 0) this.collapseBurst(this.state.structures[i], this.structureViews[i]);
-      } else if (e.type === 'end') {
-        this.showResult(e.winner);
       }
     }
   }
@@ -780,11 +786,13 @@ class Battle extends Phaser.Scene {
     this.resultShown = true;
     this.selected = null;
     const detail = { winner, guest: !account.signedIn };
-    const match = await this.matchStart;
+    // Nooit blijven hangen op het netwerk: na 8 s tonen we de uitslag hoe dan ook.
+    const timeout = (p, ms) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('Server did not respond — rewards will not be counted for this battle.')), ms))]);
+    const match = await timeout(this.matchStart, 4000).catch(() => null);
     if (match?.matchId) {
       try {
-        detail.reward = await account.api('POST', 'match-finish.php', { matchId: match.matchId,
-          result: winner === 'blue' ? 'win' : 'loss', ...this.stats });
+        detail.reward = await timeout(account.api('POST', 'match-finish.php', { matchId: match.matchId,
+          result: winner === 'blue' ? 'win' : 'loss', ...this.stats }), 8000);
         if (account.profile) account.loadProfile().catch(() => {});
       } catch (e) { detail.error = e.message; }
     }
@@ -816,6 +824,7 @@ class Battle extends Phaser.Scene {
       this.syncUnitViews();        // nieuwe eenheden krijgen een sprite vóór hun eerste klap
       this.handleEvents(step(this.state, SIM_STEP));
     }
+    if (this.state.ended && !this.resultShown) this.showResult(this.state.winner);   // vangnet
     this.syncUnitViews();
     this.drawUnits();
     this.drawStructures();
