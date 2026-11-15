@@ -146,7 +146,8 @@ function canFight(state, a, b) {
  *   3. Het vijandelijke gebouw van deze baan.
  */
 export function chooseTarget(state, unit) {
-  const enemies = state.units.filter(e => e.side !== unit.side && e.hp > 0 && !e.hidden &&
+  // Een eenheid die betoverd wordt door een spion is 'gereserveerd': die kant valt haar niet aan.
+  const enemies = state.units.filter(e => e.side !== unit.side && e.hp > 0 && !e.hidden && (!e.charmedBy || e.charmedBy === unit.id) &&
     canFight(state, unit, e) && (unit.card.type !== 'spy' ||
       (e.card.material === 'bio' && e.card.cost <= unit.card.maxStealCost && e.card.type !== 'spy')));
   const current = enemies.find(e => e.id === unit.targetId);
@@ -344,7 +345,7 @@ export function step(state, dt) {
     if (s.cd > 0) continue;
     let nearest = null;
     for (const u of state.units) {
-      if (u.side === s.side || u.hp <= 0 || u.hidden) continue;
+      if (u.side === s.side || u.hp <= 0 || u.hidden || u.charmedBy) continue;
       if (s.kind !== 'castle' && u.lane !== s.lane) continue;
       if (!inRange(s, u)) continue;
       if (!nearest || gap(s, u) < gap(s, nearest)) nearest = u;

@@ -175,3 +175,17 @@ test('Healer never heals units in the other lane', () => {
   assert.ok(heals.every(e => e.targetId === sameLane.id));
   assert.ok(otherLane.hp <= 50, 'andere baan krijgt er nooit levenspunten bij');
 });
+
+test('A unit being charmed is not attacked by the spy\'s side (and its towers)', () => {
+  const s = createBattle({ ai: false });
+  const spy = addUnit(s, 'blue', 0, idx('spy'), 470);
+  spy.hp = spy.max = 5000;
+  const victim = addUnit(s, 'red', 0, idx('melee'), 500);
+  const ally = addUnit(s, 'blue', 0, idx('melee'), 440);   // blauwe legionair vlakbij
+  run(s, 0.3);
+  assert.equal(victim.state, 'charmed');
+  const events = run(s, 2);
+  assert.ok(!events.some(e => e.type === 'hit' && e.targetId === victim.id), 'niemand slaat de betoverde eenheid');
+  assert.equal(victim.hp, victim.max);
+  assert.notEqual(ally.targetId, victim.id);
+});

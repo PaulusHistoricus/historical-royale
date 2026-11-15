@@ -34,7 +34,8 @@ const art = file => ART + file + '?v=' + BUILD;
 // ---- Geluid (bestanden: tools/audio/build.sh) ----
 const AUDIO = import.meta.env.BASE_URL + 'assets/audio/';
 const SFX_FILES = ['sword-1', 'sword-2', 'sword-3', 'axe', 'death-male-1', 'death-male-2', 'death-collapse',
-  'death-female-1', 'death-female-2', 'death-female-3', 'musket', 'machine-gun', 'explosion', 'heal', 'magic-wind'];
+  'death-female-1', 'death-female-2', 'death-female-3', 'musket', 'machine-gun', 'explosion', 'heal', 'magic-wind',
+  'small-explosion', 'fire', 'kiss'];
 const MUSIC = { menu: 'music-2', battle: ['music-1', 'music-3'] };
 const SFX = {   // groep -> [bestanden, volume, minimale tijd tussen twee keer (ms)]
   sword: [['sword-1', 'sword-2', 'sword-3'], 0.45, 70],
@@ -46,6 +47,8 @@ const SFX = {   // groep -> [bestanden, volume, minimale tijd tussen twee keer (
   boom: [['explosion'], 0.45, 90],
   heal: [['heal'], 0.35, 450],
   magic: [['magic-wind'], 0.4, 400],
+  pot: [['small-explosion'], 0.5, 90],
+  kiss: [['kiss'], 0.6, 200],
 };
 const FEMALE = new Set(['healer', 'spy']);
 const lastPlayed = {};
@@ -349,7 +352,7 @@ class Battle extends Phaser.Scene {
     });
 
     this.scale.on('resize', this.layout, this);
-    this.events.once('shutdown', () => this.scale.off('resize', this.layout, this));
+    this.events.once('shutdown', () => { this.scale.off('resize', this.layout, this); this.fireLoop?.stop(); this.fireLoop = null; });
     this.layout();
   }
 
@@ -568,7 +571,7 @@ class Battle extends Phaser.Scene {
         }
       } else if (e.type === 'possess') {
         this.vanishing.add(e.spyId);
-        sfx(this, 'magic', 0.8);
+        sfx(this, 'kiss');           // de kus = het moment van overname
         const target = this.state.units.find(u => u.id === e.targetId);
         this.sparks.push({ x: e.x, y: (target ? footY(target) : e.y) - 30, t: 0, dur: 0.7, color: 0xff7ad9, heal: true });
       } else if (e.type === 'hit') {
@@ -714,7 +717,17 @@ class Battle extends Phaser.Scene {
     }
   }
 
+  // Brandgeluid zolang er eenheden branden, harder naarmate er meer branden.
+  updateFireSound() {
+    const burning = this.state.units.filter(u => u.burnRemaining > 0).length;
+    if (burning && !this.paused && !this.state.ended) {
+      if (!this.fireLoop) { this.fireLoop = this.sound.add('fire', { loop: true, volume: 0 }); this.fireLoop.play(); }
+      this.fireLoop.setVolume(Math.min(0.5, 0.22 + burning * 0.07));
+    } else if (this.fireLoop) { this.fireLoop.stop(); this.fireLoop.destroy(); this.fireLoop = null; }
+  }
+
   drawUnits() {
+    this.updateFireSound();
     const now = this.time.now, g = this.ground, b = this.bars;
     g.clear(); b.clear();
     for (const u of this.state.units) {
@@ -822,7 +835,7 @@ class Battle extends Phaser.Scene {
         g.fillStyle(0x8a8580).fillCircle(x - 1, y - 1, 1.2);
       }
       if (k >= 1 && p.kind === 'pot') {
-        sfx(this, 'boom', 0.55);
+        sfx(this, 'pot');
         this.add.sprite(p.x1, p.y1 + 30, 'fx-fire').setOrigin(0.5, 1).setScale(0.42).setDepth(p.y1 + 40)
           .setBlendMode(Phaser.BlendModes.ADD).play('fx-fire:burst').once('animationcomplete', (_a, _f, spr) => spr.destroy());
         return false;
