@@ -91,6 +91,39 @@ function googleRequest(string $url, array $post = []): array {
     if (!is_array($data)) throw new RuntimeException('Invalid OAuth JSON');
     return $data;
 }
+/** Verify Google's RS256 ID token locally with Google's rotating X.509 public keys. */
+function verifyGoogleIdToken(string $jwt, string $clientId, string $expectedNonce): array {
+    $parts = explode('.', $jwt);
+    if (count($parts) !== 3 || strlen($jwt) > 10000) throw new RuntimeException('Malformed Google ID token');
+    $decode = static function(string $part): string|false {
+        return base64_decode(strtr($part, '-_', '+/'), true);
+    };
+    $header = json_decode($decode($parts[0]) ?: '', true);
+    $claims = json_decode($decode($parts[1]) ?: '', true);
+    $signature = $decode($parts[2]);
+    if (!is_array($header) || !is_array($claims) || !is_string($signature) ||
+        ($header['alg'] ?? '') !== 'RS256' || empty($header['kid']) ||
+        !is_string($header['kid'])) throw new RuntimeException('Invalid Google token header');
+    $certs = function_exists('apcu_fetch') ? apcu_fetch('legionroyale_google_certs_v1') : false;
+    if (!is_array($certs) || !isset($certs[$header['kid']])) {
+        $certs = googleRequest('https://www.googleapis.com/oauth2/v1/certs');
+        if (function_exists('apcu_store')) apcu_store('legionroyale_google_certs_v1', $certs, 900);
+    }
+    $pem = $certs[$header['kid']] ?? null;
+    if (!is_string($pem) || openssl_verify($parts[0] . '.' . $parts[1], $signature, $pem, OPENSSL_ALGO_SHA256) !== 1) {
+        throw new RuntimeException('Google token signature verification failed');
+    }
+    if (!in_array($claims['iss'] ?? '', ['accounts.google.com', 'https://accounts.google.com'], true) ||
+        !hash_equals($clientId, (string)($claims['aud'] ?? '')) ||
+        (int)($claims['exp'] ?? 0) <= time() ||
+        (int)($claims['iat'] ?? 0) > time() + 60 ||
+        !hash_equals($expectedNonce, (string)($claims['nonce'] ?? '')) ||
+        !isset($claims['sub']) || !is_string($claims['sub']) ||
+        strlen($claims['sub']) > 255 || $claims['sub'] === '') {
+        throw new RuntimeException('Google token claim verification failed');
+    }
+    return $claims;
+}
 function sessionPlayer(): ?array {
     $id = $_SESSION['player_id'] ?? null;
     if (!is_int($id) || $id < 1) return null;
