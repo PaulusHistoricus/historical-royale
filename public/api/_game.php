@@ -5,7 +5,7 @@ require_once __DIR__ . '/_bootstrap.php';
 // Houd CARD_TYPES en de formules gelijk aan src/progression.js (getest in tests/progression.test.js).
 
 const CARD_TYPES = ['melee', 'archer', 'cannon', 'cavalry', 'berserker', 'horse_archer', 'musket',
-    'healer', 'samurai', 'spy', 'firethrower', 'p51'];
+    'healer', 'samurai', 'spy', 'firethrower', 'p51', 'spartan', 'plague', 'banner', 'flamegi', 'lancer', 'assassin'];
 const DEFAULT_DECK = ['melee', 'archer', 'cannon', 'cavalry', 'berserker', 'horse_archer', 'musket', 'healer'];
 const DECK_SIZE = 8;
 const MAX_LEVEL = 50;

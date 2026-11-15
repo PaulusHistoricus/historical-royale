@@ -3,7 +3,7 @@ import './style.css';
 import './auth.js';
 import './screens.js';
 import { account } from './account.js';
-import { W, LANES, FIELD_BOTTOM, CARDS, DEPLOY_ZONE, MATCH_SECONDS, ENERGY_MAX } from './sim/config.js';
+import { W, LANES, FIELD_BOTTOM, CARDS, MATCH_SECONDS, ENERGY_MAX } from './sim/config.js';
 import * as sim from './sim/battle.js';
 import { createHand, playFromHand, HAND_SIZE } from './sim/hand.js';
 import UNIT_ART from './art/units.json';
@@ -13,7 +13,7 @@ import BAR_ART from './art/cardbar.json';
 import FX_ART from './art/effects.json';
 import SCREEN_ART from './art/screens.json';
 import { VERSION_LABEL, BUILD, ensureLatestBuild } from './version.js';
-const { createBattle, deploy, step, findById, gap } = sim;
+const { createBattle, deploy, step, findById, gap, deployZone } = sim;
 
 // Dit bestand bevat ALLEEN weergave en invoer. Alle spelregels (lopen, doelwit
 // kiezen, aanvallen, schade, AI, energie, kaartenhand) staan in src/sim/ en
@@ -37,7 +37,8 @@ const art = file => ART + file + '?v=' + BUILD;
 const AUDIO = import.meta.env.BASE_URL + 'assets/audio/';
 const SFX_FILES = ['sword-1', 'sword-2', 'sword-3', 'axe', 'death-male-1', 'death-male-2', 'death-collapse',
   'death-female-1', 'death-female-2', 'death-female-3', 'musket', 'machine-gun', 'explosion', 'heal', 'magic-wind',
-  'small-explosion', 'fire', 'kiss', 'tower-collapse', 'fire-magic', 'arrow'];
+  'small-explosion', 'fire', 'kiss', 'tower-collapse', 'fire-magic', 'arrow',
+  'spear-1', 'spear-2', 'potion-1', 'potion-2', 'choir', 'flamethrower', 'horse-death', 'gallop', 'knife', 'teleport', 'laugh'];
 const MUSIC = { menu: 'music-2', battle: ['music-1', 'music-3'] };
 const SFX = {   // groep -> [bestanden, volume, minimale tijd tussen twee keer (ms)]
   sword: [['sword-1', 'sword-2', 'sword-3'], 0.45, 70],
@@ -54,8 +55,15 @@ const SFX = {   // groep -> [bestanden, volume, minimale tijd tussen twee keer (
   collapse: [['tower-collapse'], 0.7, 250],
   fireMagic: [['fire-magic'], 0.45, 250],
   arrow: [['arrow'], 0.4, 90],
+  spear: [['spear-1', 'spear-2'], 0.45, 90],
+  potion: [['potion-1', 'potion-2'], 0.45, 200],
+  choir: [['choir'], 0.35, 1500],
+  horseDeath: [['horse-death'], 0.5, 300],
+  knife: [['knife'], 0.45, 80],
+  teleport: [['teleport'], 0.4, 300],
+  laugh: [['laugh'], 0.55, 600],
 };
-const FEMALE = new Set(['healer', 'spy']);
+const FEMALE = new Set(['healer', 'spy', 'banner', 'assassin']);
 let autoFullscreenDone = false;
 
 // Levend vuur bovenop de geschilderde schadestadia: [x, y, grootte, soort] in framepixels
@@ -94,7 +102,6 @@ function playMusic(scene, key) {
 }
 const SIM_STEP = 1 / 60;            // vaste simulatiestap, onafhankelijk van de framerate
 const TEAM = { blue: 0x4f9be8, red: 0xe0513f };
-const ZONE = DEPLOY_ZONE.blue;
 const FONT = 'Georgia, "Times New Roman", serif';
 const DEBUG = new URLSearchParams(location.search).has('debug');
 const COUNTDOWN = 5;                // seconden kijktijd voordat het gevecht begint
@@ -110,12 +117,14 @@ const setSoundOn = (game, on) => { try { localStorage.setItem('lr-sound', on ? '
 // Waar voeten en gebouwen in de arena-art staan (wereldpixels).
 const footY = u => LANES[u.lane] + 8 + (u.y - LANES[u.lane]) * 0.6;
 const STRUCTURE_FOOT = { tower: lane => LANES[lane] + 20, castle: () => 246 };
-const UNIT_HEIGHT = { melee: 56, archer: 58, cannon: 54, cavalry: 70, berserker: 56, horse_archer: 72, musket: 58, healer: 58, samurai: 60, spy: 54, firethrower: 57 };   // voor de levensbalk
-const MOUNTED = new Set(['cavalry', 'horse_archer']);
-const MELEE_KINDS = new Set(['melee', 'cavalry', 'berserker', 'samurai', 'spy']);
+const UNIT_HEIGHT = { melee: 56, archer: 58, cannon: 54, cavalry: 70, berserker: 56, horse_archer: 72, musket: 58, healer: 58, samurai: 60, spy: 54, firethrower: 57,
+  spartan: 60, plague: 60, banner: 62, flamegi: 56, lancer: 72, assassin: 56 };   // voor de levensbalk
+const MOUNTED = new Set(['cavalry', 'horse_archer', 'lancer']);
+const MELEE_KINDS = new Set(['melee', 'cavalry', 'berserker', 'samurai', 'spy', 'banner', 'lancer']);
 const CARD_LABEL = { melee: 'Legionary', archer: 'Archer', cannon: 'Cannon', cavalry: 'Cavalry',
   berserker: 'Berserker', horse_archer: 'Horse Archer', musket: 'Musketeer',
-  healer: 'Priestess', samurai: 'Samurai', spy: 'Spy', firethrower: 'Fire Thrower', p51: 'P-51 Mustang' };
+  healer: 'Priestess', samurai: 'Samurai', spy: 'Spy', firethrower: 'Fire Thrower', p51: 'P-51 Mustang',
+  spartan: 'Spartan', plague: 'Plague Doctor', banner: 'Banner Maiden', flamegi: 'Flamethrower', lancer: 'Steppe Lancer', assassin: 'Assassin' };
 
 const unitTexture = (type, side) => {
   const list = UNIT_ART[type].textures;
@@ -349,7 +358,7 @@ class Battle extends Phaser.Scene {
     this.projectiles = [];         // puur visueel
     this.sparks = [];
     this.planes = new Map();       // P-51 overvluchten: strike-id -> sprite
-    if (DEBUG) window.__HR__ = { scene: this, state: this.state, sim };
+    if (DEBUG) window.__HR__ = { scene: this, state: this.state, sim, cards: CARDS };
 
     this.backdrop = this.add.graphics().setDepth(-20);   // vult de ruimte rond veld en balk
     this.add.image(0, 0, 'arena').setOrigin(0, 0).setScale(W / WORLD_ART.arena.width).setDepth(-10);
@@ -404,16 +413,21 @@ class Battle extends Phaser.Scene {
     });
 
     this.scale.on('resize', this.layout, this);
-    this.events.once('shutdown', () => { this.scale.off('resize', this.layout, this); this.fireLoop?.stop(); this.fireLoop = null; });
+    this.events.once('shutdown', () => {
+      this.scale.off('resize', this.layout, this); this.fireLoop?.stop(); this.fireLoop = null;
+      for (const l of Object.values(this.loops ?? {})) l?.stop();
+      this.loops = {};
+    });
     this.layout();
   }
 
   tryDeploy(x, y) {
     if (this.paused) return;
     if (this.countdown > 0) { this.message.setText('Wait for the battle to start'); return; }
-    if (y >= FIELD_BOTTOM || y < 40 || x < ZONE.min || x > ZONE.max) return;
+    if (y >= FIELD_BOTTOM || y < 40) return;
     const lane = Math.abs(y - LANES[0]) <= Math.abs(y - LANES[1]) ? 0 : 1;
-    if (Math.abs(y - LANES[lane]) > 48) return;
+    const zone = deployZone(this.state, 'blue', lane);
+    if (Math.abs(y - LANES[lane]) > 48 || x < zone.min || x > zone.max) return;
     if (this.selected === null) {
       this.message.setText('Select a card first');
       return;
@@ -438,12 +452,15 @@ class Battle extends Phaser.Scene {
       : CARDS[this.hand.slots[slot]].name + ' selected — tap a blue lane');
   }
 
+  // Plaatsingszones per baan; schuiven op als er een toren valt (deployZone in de simulatie).
   drawDeployZones() {
-    const g = this.add.graphics().setDepth(0);
-    for (const y of LANES) {
-      g.fillStyle(0x6fc2ff, 0.13).fillRoundedRect(ZONE.min, y - 22, ZONE.max - ZONE.min, 46, 6);
-      g.lineStyle(1.5, 0x9fdcff, 0.55).strokeRoundedRect(ZONE.min, y - 22, ZONE.max - ZONE.min, 46, 6);
-    }
+    const g = this.zoneGfx ??= this.add.graphics().setDepth(0);
+    g.clear();
+    LANES.forEach((y, lane) => {
+      const z = deployZone(this.state, 'blue', lane);
+      g.fillStyle(0x6fc2ff, 0.13).fillRoundedRect(z.min, y - 22, z.max - z.min, 46, 6);
+      g.lineStyle(1.5, 0x9fdcff, 0.55).strokeRoundedRect(z.min, y - 22, z.max - z.min, 46, 6);
+    });
   }
 
   // Vier kaartvakken in de geschilderde balk. Posities worden in layout() gezet.
@@ -454,7 +471,8 @@ class Battle extends Phaser.Scene {
       zone.on('pointerdown', () => this.selectSlot(slot));
       const cost = this.text(0, 0, '', 14).setOrigin(0.5).setDepth(1170);
       const label = this.text(0, 0, '', 8).setOrigin(0.5).setDepth(1170);
-      return { image, zone, cost, label, enter: 1, x: 0, y: 0, h: 0, k: 0 };
+      const lvl = this.text(0, 0, '', 8, '#ffe39b').setOrigin(1, 0).setDepth(1170);
+      return { image, zone, cost, label, lvl, enter: 1, x: 0, y: 0, h: 0, k: 0 };
     });
     this.cards.forEach((_, slot) => this.refreshCardSlot(slot));
   }
@@ -467,6 +485,7 @@ class Battle extends Phaser.Scene {
     view.image.setFrame(view.art.frame);
     view.cost.setText(String(card.cost));
     view.label.setText(CARD_LABEL[card.type] ?? card.name);
+    view.lvl.setText('Lv ' + (this.state.cardLevels.blue[card.type] ?? 1));   // kaartniveau in het gevecht
   }
 
   // Pauzeknop linksboven: hervatten, geluid, opnieuw beginnen, opgeven (Esc werkt ook).
@@ -559,6 +578,7 @@ class Battle extends Phaser.Scene {
       c.zone.setPosition(c.x, c.y).setSize(s.w * sc, s.h * sc);
       c.cost.setFontSize(Math.round(c.h * 0.16)).setStroke('#2a1d10', Math.max(2, c.h * 0.03));
       c.label.setFontSize(Math.round(c.h * 0.085)).setStroke('#2a1d10', Math.max(2, c.h * 0.02));
+      c.lvl.setFontSize(Math.round(c.h * 0.075)).setStroke('#2a1d10', Math.max(2, c.h * 0.02));
     });
     this.energyText.setFontSize(Math.round(BAR_ART.plaque.h * sc * 0.62));
 
@@ -613,6 +633,13 @@ class Battle extends Phaser.Scene {
         const plus = this.add.text(e.to.x, ay - 14, '+' + Math.round(e.amount), textStyle(11, '#8dffa3', { strokeThickness: 3 }))
           .setOrigin(0.5).setDepth(1020).setResolution(clamp(Math.ceil(this.view.zoom), 1, 4));
         this.tweens.add({ targets: plus, y: plus.y - 18, alpha: 0, duration: 900, onComplete: () => plus.destroy() });
+      } else if (e.type === 'infect') {
+        const t = this.state.units.find(u => u.id === e.targetId);
+        if (t) for (let i = 0; i < 6; i++) this.sparks.push({ x: t.x + (Math.random() - 0.5) * 16, y: footY(t) - 20 - Math.random() * 20, t: 0, dur: 0.6, color: 0x8dff5a, heal: true });
+      } else if (e.type === 'knockback') {
+        const t = this.state.units.find(u => u.id === e.id);
+        if (t) for (let i = 0; i < 10; i++) this.fireParts.push({ kind: 'smoke', x: t.x + (Math.random() - 0.5) * 20, y: footY(t) - 2,
+          vx: (Math.random() - 0.5) * 30, vy: -8 - Math.random() * 10, life: 0, max: 0.6 + Math.random() * 0.4, r: 3 + Math.random() * 3 });
       } else if (e.type === 'cloak') {
         sfx(this, 'magic', 0.5);
         const v = this.views.get(e.id);
@@ -625,13 +652,15 @@ class Battle extends Phaser.Scene {
       } else if (e.type === 'possess') {
         this.vanishing.add(e.spyId);
         sfx(this, 'kiss');           // de kus = het moment van overname
+        this.time.delayedCall(450, () => sfx(this, 'laugh'));
         const target = this.state.units.find(u => u.id === e.targetId);
         this.sparks.push({ x: e.x, y: (target ? footY(target) : e.y) - 30, t: 0, dur: 0.7, color: 0xff7ad9, heal: true });
       } else if (e.type === 'hit') {
         const attacker = this.views.get(e.attackerId);
         if (attacker?.sprite && now >= (attacker.sameTick ?? 0)) {
           // Samoerai: eerste klap uit de schaduw is de 'reveal strike'.
-          const anim = attacker.type === 'samurai' && !attacker.revealed ? 'reveal' : 'attack';
+          const anim = attacker.type === 'samurai' && !attacker.revealed ? 'reveal'
+            : attacker.type === 'flamegi' ? 'flame' : attacker.type === 'assassin' && e.backstab ? 'backstab' : 'attack';
           if (attacker.type === 'samurai') attacker.revealed = true;
           attacker.sprite.anims.play(`${attacker.sprite.texture.key}:${anim}`);
           attacker.lockUntil = now + attacker.sprite.anims.currentAnim.duration;
@@ -640,7 +669,11 @@ class Battle extends Phaser.Scene {
         const target = this.views.get(e.targetId);
         if (target) {
           target.flashUntil = now + 110;
-          if (target.sprite && now >= target.lockUntil && UNIT_ART[target.type]?.anims.hit.length > 1) {
+          const ranged = ['archer', 'horse_archer', 'musket', 'plague', 'firethrower', 'tower', 'castle'].includes(e.kind);
+          if (target.type === 'spartan' && ranged && now >= target.lockUntil) {   // schild omhoog tegen projectielen
+            target.sprite.anims.play(`${target.sprite.texture.key}:shield_wall`);
+            target.lockUntil = now + target.sprite.anims.currentAnim.duration;
+          } else if (target.sprite && now >= target.lockUntil && UNIT_ART[target.type]?.anims.hit.length > 1) {
             target.sprite.anims.play(`${target.sprite.texture.key}:hit`);
             target.lockUntil = now + 170;
           }
@@ -650,6 +683,9 @@ class Battle extends Phaser.Scene {
         }
         this.spawnEffect(e);
         if (e.kind === 'berserker') sfx(this, 'axe');
+        else if (e.kind === 'spartan') sfx(this, 'spear');
+        else if (e.kind === 'assassin') { sfx(this, 'knife'); if (e.backstab) sfx(this, 'teleport'); }
+        else if (e.kind === 'plague') sfx(this, 'potion');
         else if (MELEE_KINDS.has(e.kind)) sfx(this, 'sword');
         else if (e.kind === 'musket') sfx(this, 'musket');
         else if (e.kind === 'healer') sfx(this, 'fireMagic');   // aanval van de priesteres
@@ -659,7 +695,8 @@ class Battle extends Phaser.Scene {
           this.views.delete(e.id);
           this.tweens.add({ targets: view.sprite, alpha: 0, scale: view.sprite.scale * 0.9, duration: 350, onComplete: () => view.sprite.destroy() });
         } else if (view) {
-          sfx(this, FEMALE.has(view.type) ? 'deathFemale' : 'deathMale');
+          sfx(this, MOUNTED.has(view.type) ? 'horseDeath' : FEMALE.has(view.type) ? 'deathFemale' : 'deathMale');
+          if (e.killerType === 'assassin') this.time.delayedCall(250, () => sfx(this, 'laugh'));
           this.views.delete(e.id);
           view.burn?.destroy();
           if (view.sprite) {
@@ -669,6 +706,10 @@ class Battle extends Phaser.Scene {
         }
       } else if (e.type === 'destroyed') {
         if (e.kind === 'tower' && e.side === 'red') this.stats.towersDestroyed++;
+        if (e.kind === 'tower') {
+          this.drawDeployZones();
+          if (e.side === 'red') this.message.setText('Tower down — your deploy zone moves forward!');
+        }
         sfx(this, 'collapse');
         this.cameras.main.shake(380, 0.006);
         const i = this.state.structures.findIndex(s => s.id === e.id);
@@ -681,6 +722,20 @@ class Battle extends Phaser.Scene {
 
   spawnEffect(e) {
     const dir = e.to.x >= e.from.x ? 1 : -1;
+    if (e.kind === 'flamegi') {   // vlammenkegel: één vlammenstoot per puls, ongeacht hoeveel er geraakt worden
+      const key = e.attackerId + ':' + Math.round(this.state.time * 20);
+      if (this.lastFlame === key) return;
+      this.lastFlame = key;
+      const gi = this.state.units.find(u => u.id === e.attackerId);
+      if (!gi) return;
+      const fx0 = gi.x + gi.facing * 22, fy0 = footY(gi) - 22, reach = gi.card.range + gi.radius;
+      for (let i = 0; i < 9; i++) {
+        const d = Math.random();
+        this.fireParts.push({ kind: 'flame', x: fx0 + gi.facing * reach * d * 0.4, y: fy0 + (Math.random() - 0.5) * 6,
+          vx: gi.facing * (reach * 1.6 + Math.random() * 40), vy: -6 - Math.random() * 12, life: 0, max: 0.32 + Math.random() * 0.12, r: 3 + Math.random() * 3 });
+      }
+      return;
+    }
     const targetUnit = this.state.units.find(u => u.id === e.targetId);
     const targetY = targetUnit ? footY(targetUnit) - 26 : this.structureTop(e.targetId) + 30;
     if (MELEE_KINDS.has(e.kind)) {
@@ -708,7 +763,7 @@ class Battle extends Phaser.Scene {
     }
     else { x0 = e.from.x; y0 = this.structureTop(e.attackerId) + 10; }
     const dist = Math.abs(e.to.x - x0);
-    const kind = { cannon: 'ball', musket: 'bullet', healer: 'bolt', firethrower: 'pot' }[e.kind] ?? 'arrow';
+    const kind = { cannon: 'ball', musket: 'bullet', healer: 'bolt', firethrower: 'pot', plague: 'vial' }[e.kind] ?? 'arrow';
     this.projectiles.push({ kind, archer: e.kind === 'archer' || e.kind === 'horse_archer', x0, y0, x1: e.to.x, y1: targetY,
       t: 0, dur: Math.max(e.kind === 'musket' ? 0.06 : 0.12, dist / ({ cannon: 520, musket: 1600, healer: 900, firethrower: 420 }[e.kind] ?? 760)),
       arc: { cannon: 26, musket: 0, healer: 0, firethrower: 34 }[e.kind] ?? 10 });
@@ -764,6 +819,9 @@ class Battle extends Phaser.Scene {
     this.syncUnitViews();
     this.drawUnits();
     this.drawStructures();
+    // Zones opnieuw tekenen zodra het aantal staande torens verandert.
+    const towers = this.state.structures.filter(t => t.kind === 'tower' && t.hp > 0).length;
+    if (towers !== this.towerCount) { this.towerCount = towers; this.drawDeployZones(); }
     this.drawFires(dt);
     this.drawEffects(dt);
     this.drawAirstrikes();
@@ -777,8 +835,24 @@ class Battle extends Phaser.Scene {
       const def = UNIT_ART[u.card.type];
       const sprite = this.add.sprite(u.x, footY(u), unitTexture(u.card.type, u.side), def.anims.idle[0])
         .setOrigin(def.originX, def.originY).setScale(1 / TEX);
-      this.views.set(u.id, { sprite, type: u.card.type, side: u.side, lockUntil: 0, flashUntil: 0, burn: null, revealed: false });
+      const view = { sprite, type: u.card.type, side: u.side, lockUntil: 0, flashUntil: 0, burn: null, revealed: false };
+      this.views.set(u.id, view);
+      if (u.card.type === 'banner') {   // vaandel heffen bij binnenkomst (Rally)
+        sprite.anims.play(`${sprite.texture.key}:rally`);
+        view.lockUntil = this.time.now + sprite.anims.currentAnim.duration;
+        sfx(this, 'choir');
+      }
     }
+  }
+
+  /** Doorlopend geluid zolang `on`: één lus per naam (vlammenwerper, getrappel). */
+  loopSound(name, on, volume) {
+    this.loops ??= {};
+    const cur = this.loops[name];
+    if (on && !this.paused && !this.state.ended) {
+      if (!cur) { this.loops[name] = this.sound.add(name, { loop: true, volume }); this.loops[name].play(); }
+      else cur.setVolume(volume);
+    } else if (cur) { cur.stop(); cur.destroy(); this.loops[name] = null; }
   }
 
   // Brandgeluid zolang er eenheden branden, harder naarmate er meer branden.
@@ -789,6 +863,10 @@ class Battle extends Phaser.Scene {
       if (!this.fireLoop) { this.fireLoop = this.sound.add('fire', { loop: true, volume: 0 }); this.fireLoop.play(); }
       this.fireLoop.setVolume(Math.min(0.5, 0.22 + burning * 0.07));
     } else if (this.fireLoop) { this.fireLoop.stop(); this.fireLoop.destroy(); this.fireLoop = null; }
+    const flaming = this.state.units.filter(u => u.card.type === 'flamegi' && u.state === 'attack').length;
+    this.loopSound('flamethrower', flaming > 0, Math.min(0.5, 0.3 + flaming * 0.08));
+    const riding = this.state.units.filter(u => MOUNTED.has(u.card.type) && u.state === 'move').length;
+    this.loopSound('gallop', riding > 0, Math.min(0.45, 0.2 + riding * 0.06));
   }
 
   drawUnits() {
@@ -825,7 +903,9 @@ class Battle extends Phaser.Scene {
       } else {
         if (v.sprite.anims.isPaused) v.sprite.anims.resume();
         if (now >= v.lockUntil) {
-          const anim = u.state === 'move' ? 'walk' : u.card.type === 'spy' && u.channelTargetId ? 'charm' : 'idle';
+          const chargeReady = u.card.type === 'lancer' && !u.chargeUsed && u.distanceTravelled >= u.card.chargeDistance;
+          const anim = u.state === 'move' ? (chargeReady && (u.id + Math.floor(now / 900)) % 3 === 0 ? 'charge' : 'walk')
+            : u.card.type === 'spy' && u.channelTargetId ? 'charm' : 'idle';
           v.sprite.anims.play(`${v.sprite.texture.key}:${anim}`, true);
         }
       }
@@ -833,7 +913,14 @@ class Battle extends Phaser.Scene {
       else if (now < v.flashUntil) v.sprite.setTint(0xff9a8a);
       else if (now < (v.charmUntil ?? 0)) v.sprite.setTint(0xffa6e8);
       else if (u.hidden) v.sprite.setTint(0xb48cff);
+      else if (u.poisonRemaining > 0) v.sprite.setTint(0xb8ffa0);
       else v.sprite.clearTint();
+      // Statuseffecten: gif (groene belletjes), Rally (gouden vonkjes), schildmuur (glinstering).
+      if (u.poisonRemaining > 0 && Math.random() < 0.12) this.fireParts.push({ kind: 'poison', x: u.x + (Math.random() - 0.5) * 14,
+        y: fy - 30 - Math.random() * 20, vx: 0, vy: -18, life: 0, max: 0.7, r: 1.4 + Math.random() });
+      if (u.rallied && Math.random() < 0.05) this.fireParts.push({ kind: 'gold', x: u.x + (Math.random() - 0.5) * 18,
+        y: fy - 8 - Math.random() * 30, vx: 0, vy: -14, life: 0, max: 0.8, r: 1.1 });
+      if (u.shielded && Math.random() < 0.02) this.sparks.push({ x: u.x + u.facing * 10, y: fy - 34, t: 0, dur: 0.4, color: 0xffe9a0 });
       // Brandende eenheden: vlammetjes (additief).
       if (u.burnRemaining > 0) {
         if (!v.burn) v.burn = this.add.sprite(u.x, fy, 'fx-fire').setOrigin(0.5, 1).setScale(0.22)
@@ -904,6 +991,11 @@ class Battle extends Phaser.Scene {
       } else if (p.kind === 'ember') {
         p.vx += Math.sin(p.life * 9 + p.r * 10) * 40 * dt; p.vy += 12 * dt;
         fl.fillStyle(k < 0.5 ? 0xffe08a : 0xff8a3a, 1 - k).fillCircle(p.x, p.y, p.r);
+      } else if (p.kind === 'poison') {
+        p.vy += 40 * dt;
+        fl.fillStyle(0x8dff5a, 0.8 * (1 - k)).fillCircle(p.x, p.y, p.r * (1 - 0.4 * k));
+      } else if (p.kind === 'gold') {
+        fl.fillStyle(0xffe08a, 0.9 * (1 - k)).fillCircle(p.x, p.y, p.r);
       } else if (p.kind === 'debris') {
         p.vy += 260 * dt;
         sm.fillStyle(p.color, 1 - k * k).fillRect(p.x - p.r, p.y - p.r, p.r * 2, p.r * 2);
@@ -944,6 +1036,10 @@ class Battle extends Phaser.Scene {
         g.fillStyle(0xff9a2e, 0.45).fillCircle(x - Math.sign(p.x1 - p.x0) * 5, y - 2, 6);
         g.fillStyle(0x9a5428).fillCircle(x, y, 3.8);
         g.fillStyle(0xffd36b).fillCircle(x, y - 3, 2);
+      } else if (p.kind === 'vial') {   // gifflesje van de pestdokter
+        g.fillStyle(0x7dff4a, 0.3).fillCircle(x, y, 6);
+        g.fillStyle(0x3fbf2a).fillCircle(x, y, 3.4);
+        g.fillStyle(0xd8ffb8).fillCircle(x - 1, y - 1.5, 1.2);
       } else if (p.kind === 'bullet') {
         g.lineStyle(1.4, 0xffe6a0, 0.8).lineBetween(x - Math.sign(p.x1 - p.x0) * 10, y, x, y);
         g.fillStyle(0x3a3530).fillCircle(x, y, 1.6);
@@ -967,6 +1063,11 @@ class Battle extends Phaser.Scene {
         return false;
       }
       if (k >= 1 && p.kind === 'ball') sfx(this, 'boom');
+      if (k >= 1 && p.kind === 'vial') {   // giftige groene plons
+        for (let i = 0; i < 12; i++) this.fireParts.push({ kind: 'poison', x: p.x1 + (Math.random() - 0.5) * 10, y: p.y1 + 10,
+          vx: (Math.random() - 0.5) * 60, vy: -20 - Math.random() * 40, life: 0, max: 0.5 + Math.random() * 0.4, r: 1.5 + Math.random() * 2 });
+        return false;
+      }
       if (k >= 1 && p.kind === 'arrow' && p.archer) sfx(this, 'arrow');   // pijl van boogschutters (torens niet: te veel)
       if (k >= 1) {
         this.sparks.push(p.kind === 'ball'
@@ -1087,6 +1188,11 @@ class Battle extends Phaser.Scene {
       o.fillStyle(affordable ? 0xb27af0 : 0x6c6672, 0.9).fillCircle(gx - gr * 0.25, gy - gr * 0.3, gr * 0.5);
       o.lineStyle(Math.max(1.5, gr * 0.12), 0xe8c574).strokeCircle(gx, gy, gr);
       c.cost.setPosition(gx, gy);
+      // niveaulabel rechtsboven in de kaart
+      const lx = c.x + cardW / 2 - h * 0.05, ly = topY + h * 0.05;
+      o.fillStyle(0x1b120a, 0.85).fillRoundedRect(lx - c.lvl.displayWidth - 6, ly - 1, c.lvl.displayWidth + 8, c.lvl.displayHeight + 2, 4);
+      o.lineStyle(1, 0xe8c574, 0.9).strokeRoundedRect(lx - c.lvl.displayWidth - 6, ly - 1, c.lvl.displayWidth + 8, c.lvl.displayHeight + 2, 4);
+      c.lvl.setPosition(lx - 2, ly).setAlpha(affordable ? 1 : 0.6);
     });
 
     const left = Math.max(0, MATCH_SECONDS - s.time);

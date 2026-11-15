@@ -19,10 +19,13 @@ import { cardLevelMultiplier } from '../progression.js';
 import {
   CARDS, STRUCTURES, STRUCTURE_POSITIONS, LANES, DEPLOY_ZONE, DETECTION_RANGE,
   MATCH_SECONDS, OVERTIME_AT, ENERGY_START, ENERGY_MAX, ENERGY_SECONDS,
-  ENERGY_SECONDS_OVERTIME, AI,
+  ENERGY_SECONDS_OVERTIME, AI, DEPLOY_ADVANCE, SUPPORT_TYPES,
 } from './config.js';
 
 const EPS = 1e-6;
+const BANNER = CARDS.find(c => c.type === 'banner');
+const RALLY = { speed: BANNER.auraSpeed, attack: BANNER.auraAttack };          // Banner Maiden
+const SHIELD_PCT = CARDS.find(c => c.type === 'spartan').shieldPct;             // Spartan Guardian
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 const other = side => (side === 'blue' ? 'red' : 'blue');
 
@@ -79,6 +82,7 @@ export function leveledCard(state, side, card) {
   const k = cardLevelMultiplier(level);
   const scaled = { ...card, level, hp: Math.round(card.hp * k), damage: Math.round(card.damage * k) };
   if (card.burnDps) scaled.burnDps = Math.round(card.burnDps * k);
+  if (card.poisonDps) scaled.poisonDps = Math.round(card.poisonDps * k);
   return scaled;
 }
 
@@ -93,6 +97,8 @@ export function addUnit(state, side, lane, cardIndex, x) {
     distanceTravelled: 0, chargeUsed: false,
     hidden: card.type === 'samurai', channelTargetId: null, channelProgress: 0,
     burnRemaining: 0, burnDps: 0,
+    poisonRemaining: 0, poisonDps: 0, noHealRemaining: 0, canSpread: false,
+    rallied: false, shielded: false, backstabUsed: false, lastHitBy: null,
     facing: side === 'blue' ? 1 : -1,
   };
   state.units.push(unit);
@@ -111,8 +117,24 @@ export function deploy(state, side, lane, cardIndex, x) {
     // deploy() kan ook buiten een step worden aangeroepen; dit event is visueel optioneel.
     return strike;
   }
-  const zone = DEPLOY_ZONE[side];
+  const zone = deployZone(state, side, lane);
   return addUnit(state, side, lane, cardIndex, clamp(x, zone.min, zone.max));
+}
+
+/**
+ * Plaatsingszone van een kant in een baan. Is de vijandelijke toren in die baan gevallen,
+ * dan schuift de zone DEPLOY_ADVANCE op richting de vijand; is je eigen toren gevallen,
+ * dan wordt je zone aan de voorkant even veel kleiner.
+ */
+export function deployZone(state, side, lane) {
+  const base = DEPLOY_ZONE[side], dir = side === 'blue' ? 1 : -1;
+  const enemyTowerDown = !laneTower(state, other(side), lane);
+  const ownTowerDown = !laneTower(state, side, lane);
+  let { min, max } = base;
+  if (side === 'blue') { if (enemyTowerDown) max += DEPLOY_ADVANCE; if (ownTowerDown) max -= DEPLOY_ADVANCE; }
+  else { if (enemyTowerDown) min -= DEPLOY_ADVANCE; if (ownTowerDown) min += DEPLOY_ADVANCE; }
+  void dir;
+  return { min, max };
 }
 
 /** Afstand van rand tot rand langs de baan. Negatief = lichamen overlappen. */
@@ -166,6 +188,17 @@ export function chooseTarget(state, unit) {
   const current = enemies.find(e => e.id === unit.targetId);
   if (current && inRange(unit, current)) return current;
 
+  // Perzische sluipmoordenares: ondersteuners (Priestess, Banner Maiden, Plague Doctor) eerst.
+  if (unit.card.type === 'assassin') {
+    let prey = null;
+    for (const e of enemies) {
+      if (!SUPPORT_TYPES.includes(e.card.type) || Math.abs(e.x - unit.x) > unit.card.supportDetect) continue;
+      if (!prey || Math.abs(e.x - unit.x) < Math.abs(prey.x - unit.x) ||
+          (Math.abs(e.x - unit.x) === Math.abs(prey.x - unit.x) && e.id < prey.id)) prey = e;
+    }
+    if (prey) return prey;
+  }
+
   const forward = unit.side === 'blue' ? 1 : -1;
   let best = null;
   for (const e of enemies) {
@@ -197,7 +230,10 @@ function stepAI(state, dt) {
   if (affordable.length) {
     const index = affordable[Math.floor(state.rng() * affordable.length)];
     const lane = Math.floor(state.rng() * LANES.length);
-    const x = AI.spawnMin + state.rng() * (AI.spawnMax - AI.spawnMin);
+    // Achterste ~77 % van de eigen zone (met de standaardzone precies AI.spawnMin..spawnMax).
+    const zone = deployZone(state, 'red', lane);
+    const lo = zone.min + (AI.spawnMin - DEPLOY_ZONE.red.min) / (DEPLOY_ZONE.red.max - DEPLOY_ZONE.red.min) * (zone.max - zone.min);
+    const x = lo + state.rng() * (zone.max - lo);
     deploy(state, 'red', lane, index, x);
   }
   state.ai.clock = AI.minDelay + state.rng() * (AI.maxDelay - AI.minDelay);
@@ -226,13 +262,45 @@ export function step(state, dt) {
   const moves = [];
   const hits = [];
 
-  // Brandwonden werken door ongeacht de huidige actie van de eenheid.
+  // Brandwonden en gif werken door ongeacht de huidige actie van de eenheid.
   for (const u of state.units) {
     if (u.burnRemaining > 0 && u.hp > 0) {
       const burnDt = Math.min(dt, u.burnRemaining);
       u.hp = Math.max(0, u.hp - u.burnDps * burnDt);
       u.burnRemaining = Math.max(0, u.burnRemaining - dt);
     }
+    if (u.poisonRemaining > 0 && u.hp > 0) {
+      const poisonDt = Math.min(dt, u.poisonRemaining);
+      u.hp = Math.max(0, u.hp - u.poisonDps * poisonDt);
+      u.poisonRemaining = Math.max(0, u.poisonRemaining - dt);
+    }
+    u.noHealRemaining = Math.max(0, u.noHealRemaining - dt);
+  }
+  // Besmetting: een direct vergiftigde eenheid steekt één keer één biologische bondgenoot aan
+  // (binnen spreadRange, zelfde baan). Die kan zelf niet verder besmetten: geen kettingreactie.
+  for (const u of state.units) {
+    if (!u.canSpread || u.hp <= 0 || u.poisonRemaining <= 0) continue;
+    let next = null;
+    for (const o of state.units) {
+      if (o === u || o.side !== u.side || o.hp <= 0 || o.lane !== u.lane || o.card.material !== 'bio' ||
+          o.poisonRemaining > 0 || Math.abs(o.x - u.x) > u.spreadRange) continue;
+      if (!next || Math.abs(o.x - u.x) < Math.abs(next.x - u.x) || (Math.abs(o.x - u.x) === Math.abs(next.x - u.x) && o.id < next.id)) next = o;
+    }
+    if (!next) continue;
+    u.canSpread = false;
+    next.poisonRemaining = u.poisonSeconds; next.poisonDps = u.poisonDps;
+    next.noHealRemaining = Math.max(next.noHealRemaining, u.poisonSeconds);
+    state.events.push({ type: 'infect', fromId: u.id, targetId: next.id, side: next.side });
+  }
+
+  // Auras en schildmuur worden elke tick opnieuw bepaald uit de levende eenheden:
+  // sterft de bron, dan is het effect meteen weg. Meerdere bronnen stapelen niet (ja/nee).
+  for (const u of state.units) {
+    u.rallied = u.hp > 0 && u.card.material === 'bio' && state.units.some(b => b !== u && b.hp > 0 &&
+      b.card.type === 'banner' && b.side === u.side && b.lane === u.lane && Math.abs(b.x - u.x) <= b.card.auraRange);
+    u.shielded = u.hp > 0 && u.card.material === 'bio' && state.units.some(g => g !== u && g.hp > 0 &&
+      g.card.type === 'spartan' && g.side === u.side && g.lane === u.lane &&
+      (u.x - g.x) * (u.side === 'blue' ? 1 : -1) < 0 && Math.abs(u.x - g.x) <= g.card.shieldRange);
   }
 
   // De P-51 is een onraakbare, eenmalige strafe over precies één baan.
@@ -296,7 +364,7 @@ export function step(state, dt) {
     // Genezeres geneest alleen biologische bondgenoten, nooit zichzelf.
     if (u.card.type === 'healer' && u.cd <= 0) {
       const allies = state.units.filter(a => a.id !== u.id && a.side === u.side && a.hp > 0 &&
-        a.card.material === 'bio' && a.hp < a.max && canFight(state, u, a) && gap(u, a) <= u.card.healRange);
+        a.card.material === 'bio' && a.hp < a.max && !(a.noHealRemaining > 0) && canFight(state, u, a) && gap(u, a) <= u.card.healRange);
       allies.sort((a, b) => a.hp / a.max - b.hp / b.max || a.id - b.id);
       if (allies.length) {
         const ally = allies[0];
@@ -337,10 +405,21 @@ export function step(state, dt) {
       } else {
         u.state = 'attack';
         if (u.cd <= 0) {
-          hits.push({ attacker: u, target });
+          if (u.card.type === 'flamegi') {
+            // Vlammenkegel: alle vijandelijke eenheden vóór de GI binnen bereik, plus het doelwit
+            // als dat een gebouw is (30 % schade). Niets achter hem.
+            for (const e of state.units) {
+              if (e.side === u.side || e.hp <= 0 || e.hidden || e.charmedBy || !canFight(state, u, e)) continue;
+              if ((e.x - u.x) * u.facing < 0 || !inRange(u, e)) continue;
+              hits.push({ attacker: u, target: e, flame: true });
+            }
+            if (target.kind) hits.push({ attacker: u, target, flame: true });
+          } else {
+            hits.push({ attacker: u, target });
+          }
           if (u.hidden) u.hidden = false; // schaduwsamoerai wordt zichtbaar bij aanval
           if (u.card.type === 'samurai') u.cloakTimer = u.card.recloakTime;
-          u.cd = u.card.rate;
+          u.cd = u.rallied ? u.card.rate / (1 + RALLY.attack) : u.card.rate;
         }
       }
     } else {
@@ -348,7 +427,8 @@ export function step(state, dt) {
       u.channelProgress = 0;
       u.state = 'move';
       // Nooit verder lopen dan tot precies op aanvalsbereik.
-      const distance = Math.min(u.card.speed * dt, gap(u, target) - u.card.range);
+      const speed = u.card.speed * (u.rallied ? 1 + RALLY.speed : 1);
+      const distance = Math.min(speed * dt, gap(u, target) - u.card.range);
       moves.push({ unit: u, dx: u.facing * distance });
     }
   }
@@ -373,12 +453,24 @@ export function step(state, dt) {
   }
 
   // 3. SCHADE
-  for (const { attacker, target } of hits) {
+  for (const { attacker, target, flame } of hits) {
     let damage = attacker.card ? attacker.card.damage : STRUCTURES[attacker.kind].damage;
-    if (attacker.card?.type === 'cavalry' && !attacker.chargeUsed &&
+    let knockback = 0, backstab = false;
+    if ((attacker.card?.type === 'cavalry' || attacker.card?.type === 'lancer') && !attacker.chargeUsed &&
         attacker.distanceTravelled >= attacker.card.chargeDistance) {
       damage += attacker.card.chargeBonus;
       attacker.chargeUsed = true;
+      if (attacker.card.knockback && !target.kind) knockback = attacker.card.knockback;
+    }
+    if (attacker.card?.type === 'assassin' && !attacker.backstabUsed && target.card && SUPPORT_TYPES.includes(target.card.type)) {
+      damage = Math.round(damage * (1 + attacker.card.backstabBonus));
+      attacker.backstabUsed = true; backstab = true;
+    }
+    if (flame && target.kind) damage = damage * attacker.card.structurePct;
+    // Schildmuur: biologische bondgenoten achter een Spartaan krijgen 40 % minder schade van
+    // projectielen van afstandseenheden (geen artillerie, gebouwen, vlammen of P-51).
+    if (target.shielded && attacker.card?.role === 'ranged' && attacker.card.type !== 'flamegi') {
+      damage = damage * (1 - SHIELD_PCT);
     }
     if (attacker.card?.type === 'berserker' && attacker.hp <= attacker.max / 2) {
       damage = Math.round(damage * attacker.card.rageMultiplier);
@@ -393,8 +485,33 @@ export function step(state, dt) {
     }
     const before = target.hp;
     target.hp = Math.max(0, target.hp - damage);
+    if (!target.kind) target.lastHitBy = attacker.id;
+    if (knockback) {   // Steppe Lancer: Breakthrough duwt het doelwit 30 terug, nooit door gebouwen of van het veld
+      const dir = attacker.facing;
+      let nx = target.x + dir * knockback;
+      for (const s of state.structures) {
+        if (s.hp <= 0 || s.side !== target.side || (s.kind === 'tower' && s.lane !== target.lane)) continue;
+        if ((s.x - target.x) * dir > 0) nx = dir > 0 ? Math.min(nx, s.x - s.radius - target.radius) : Math.max(nx, s.x + s.radius + target.radius);
+      }
+      target.x = clamp(nx, 20, 940);
+      state.events.push({ type: 'knockback', id: target.id, x: target.x, attackerId: attacker.id });
+    }
+    if (target.card && attacker.card?.type === 'plague') {
+      // Contagion: gif (niet stapelend, wel verversen) en geen genezing; alleen biologisch.
+      if (target.card.material === 'bio') {
+        if (target.poisonRemaining <= 0) target.canSpread = true;
+        target.poisonRemaining = attacker.card.poisonSeconds;
+        target.poisonDps = Math.max(target.poisonDps, attacker.card.poisonDps);
+        target.noHealRemaining = attacker.card.poisonSeconds;
+        target.poisonSeconds = attacker.card.poisonSeconds; target.spreadRange = attacker.card.spreadRange;
+      }
+    }
+    if (flame && target.card) {
+      target.burnRemaining = Math.max(target.burnRemaining, attacker.card.burnSeconds);
+      target.burnDps = Math.max(target.burnDps, attacker.card.burnDps);
+    }
     state.events.push({
-      type: 'hit',
+      type: 'hit', backstab,
       kind: attacker.card ? attacker.card.type : attacker.kind, // melee | archer | cannon | tower | castle
       side: attacker.side,
       attackerId: attacker.id,
@@ -421,7 +538,11 @@ export function step(state, dt) {
   }
 
   // 4. OPRUIMEN
-  for (const u of state.units) if (u.hp <= 0) state.events.push({ type: 'death', id: u.id, side: u.side, x: u.x, y: u.y });
+  for (const u of state.units) {
+    if (u.hp > 0) continue;
+    const killer = state.units.find(k => k.id === u.lastHitBy);
+    state.events.push({ type: 'death', id: u.id, side: u.side, x: u.x, y: u.y, killerId: u.lastHitBy, killerType: killer?.card.type ?? null });
+  }
   state.units = state.units.filter(u => u.hp > 0);
   for (const { target } of hits) {
     if (target.kind && target.hp <= 0 && !target.destroyed) {

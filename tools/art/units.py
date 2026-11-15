@@ -61,25 +61,35 @@ def hue_shift(rgb, m, src, dst, minsat=.38, width=22):
     flat[sel]=np.stack([R,G,B],1)
     return (out*255).clip(0,255).astype(np.uint8)
 
-def build(OUT, name, groups, target_h, ref_group, variants):
-    """groups: dict anim -> list of (rgb, mask)"""
+def build(OUT, name, groups, target_h, ref_group, variants, alt=None):
+    """groups: dict anim -> list of (rgb, mask[, alpha]).
+    alt: {suffix: groups} voor teamvarianten met eigen frames (zelfde animaties en aantallen);
+    alle varianten delen dan één celmaat, zodat één manifest voor beide texturen geldt."""
     ref_m=groups[ref_group][0][1]
     scale=target_h/ref_m.shape[0]
-    items=[]
-    for anim,frames in groups.items():
-        for fr in frames:
-            rgb,m=fr[0],fr[1]
-            ax,h=anchor_of(m)
-            items.append((anim,rgb,m,ax,fr[2] if len(fr)>2 else None))
-    left=max(it[3] for it in items); right=max(it[2].shape[1]-it[3] for it in items)
-    height=max(it[2].shape[0] for it in items)
+    def collect(gr):
+        out=[]
+        for anim,frames in gr.items():
+            for fr in frames:
+                rgb,m=fr[0],fr[1]
+                ax,h=anchor_of(m)
+                out.append((anim,rgb,m,ax,fr[2] if len(fr)>2 else None))
+        return out
+    sets={v:collect(groups) for v in variants}
+    for v,gr in (alt or {}).items(): sets[v]=collect(gr)
+    allit=[it for its in sets.values() for it in its]
+    left=max(it[3] for it in allit); right=max(it[2].shape[1]-it[3] for it in allit)
+    height=max(it[2].shape[0] for it in allit)
     cw=int(np.ceil((left+right)*scale))+4; ch=int(np.ceil(height*scale))+4
     ax_cell=int(round(left*scale))+2
-    anims={}; n=0
-    cols=min(len(items),10); rows=-(-len(items)//cols)  # max 10 kolommen: textuur blijft < 2048 px breed
-    sheets={v:Image.new('RGBA',(cw*cols,ch*rows),(0,0,0,0)) for v in variants}
-    for anim,rgb,m,ax,src_alpha in items:
-        for v,fn in variants.items():
+    first=next(iter(sets.values()))
+    cols=min(len(first),10); rows=-(-len(first)//cols)  # max 10 kolommen: textuur blijft < 2048 px breed
+    anims={}
+    for v,items in sets.items():
+        assert len(items)==len(first), (name, v)
+        fn=variants.get(v, lambda rgb,m: rgb)
+        sheet=Image.new('RGBA',(cw*cols,ch*rows),(0,0,0,0))
+        for n,(anim,rgb,m,ax,src_alpha) in enumerate(items):
             if src_alpha is not None:   # bron heeft echte transparantie
                 col,alpha=fn(rgb,m),src_alpha
             else:
@@ -92,11 +102,11 @@ def build(OUT, name, groups, target_h, ref_group, variants):
             al=pmr[...,3:]; pmr[...,:3]=np.where(al>0,pmr[...,:3]*255/np.maximum(al,1),0)
             small=Image.fromarray(pmr.clip(0,255).astype(np.uint8),'RGBA')
             ox=(n%cols)*cw+ax_cell-int(round(ax*scale)); oy=(n//cols)*ch+ch-2-h2
-            sheets[v].alpha_composite(small,(ox,oy))
-        anims.setdefault(anim,[]).append(n); n+=1
-    for v,sh in sheets.items(): sh.save(f'{OUT}/{name}{v}.png',optimize=True)
+            sheet.alpha_composite(small,(ox,oy))
+            if items is first: anims.setdefault(anim,[]).append(n)
+        sheet.save(f'{OUT}/{name}{v}.png',optimize=True)
     return {'frameWidth':cw,'frameHeight':ch,'originX':round(ax_cell/cw,4),'originY':round((ch-2)/ch,4),'anims':anims,
-            'textures':[f'{name}{v}' for v in variants]}
+            'textures':[f'{name}{v}' for v in sets]}
 
 def build_units(SRC, OUT, MANIFEST):
     manifest={}
@@ -157,5 +167,41 @@ def build_units(SRC, OUT, MANIFEST):
     G=board_unit(SRC+'genezeres-bord.png',{'idle':(5,155,4,400,1160),'walk':(165,312,6),'heal':(320,485,6),
         'attack':(490,640,6),'hit':(648,790,3,400,880),'death':(798,970,7)},400,1532,fx={'death':{5,6}})
     manifest['healer']=build(OUT,'healer',G,110,'idle',{'':ident})
+    # ---- Unit expansion 2: bladen met meerdere animaties per rij (zie sheetsplit.py) ----
+    from sheetsplit import sheet_frames, pick
+    blue2red = lambda rgb,m: hue_shift(rgb,m,222,358,minsat=.30,width=28)
+    F=sheet_frames(SRC+'spartaan-blauw.png')
+    G=pick(F,{'idle':[(0,0),(0,1),(0,2),(0,1)],'walk':[(0,3),(0,4),(0,5),(0,6),(0,7),(0,8)],
+              'attack':[(1,1),(1,2),(1,3),(1,4)],'shield_wall':[(1,5),(1,6),(1,7)],
+              'hit':[(2,0),(2,1)],'death':[(2,2),(2,3),(2,4),(2,5),(2,6)]})
+    manifest['spartan']=build(OUT,'spartan',G,118,'idle',{'-blue':ident,'-red':blue2red})
+    F=sheet_frames(SRC+'pestdokter.png')
+    G=pick(F,{'idle':[(0,0),(0,1),(0,2),(0,1)],'walk':[(0,3),(0,4),(0,5),(0,6),(0,7),(0,8)],
+              'attack':[(1,1),(1,2),(1,3),(1,4),(1,6)],'hit':[(2,0),(2,1)],
+              'death':[(2,2),(2,3),(2,4),(2,5),(2,6),(2,7)]})
+    manifest['plague']=build(OUT,'plague',G,112,'idle',{'':ident})
+    F=sheet_frames(SRC+'vaandeldraagster.png',rows=[(3,217),(225,389)],splits={(1,4):2})
+    G=pick(F,{'idle':[(0,0),(1,0),(0,10),(0,9)],'walk':[(0,1),(0,2),(0,3),(1,1),(1,2),(1,3)],
+              'attack':[(0,4),(0,5),(0,6),(0,7)],'rally':[(1,7),(0,8),(1,8)],
+              'hit':[(1,9)],'death':[(1,9),(1,10),(1,11)]})
+    manifest['banner']=build(OUT,'banner',G,150,'idle',{'-blue':ident,'-red':blue2red})
+    F=sheet_frames(SRC+'stepperuiter.png',splits={(0,3):3,(0,4):3,(1,3):4,(1,4):3,(2,3):3,(2,4):3,(3,3):4,(3,4):3})
+    spec=lambda a,b:{'idle':[(a,0),(a,1),(a,2),(a,1)],'walk':[(a,5),(a,8),(b,10),(b,11)],
+              'charge':[(a,3),(a,9),(a,10)],'attack':[(a,4),(a,6),(a,7)],'hit':[(a,2)],'death':[(b,11),(b,12)]}
+    Gb=pick(F,spec(0,1)); Gr=pick(F,spec(2,3))
+    manifest['lancer']=build(OUT,'lancer',Gb,140,'idle',{'-blue':ident},alt={'-red':Gr})
+    F=sheet_frames(SRC+'sluipmoordenares.png')
+    G=pick(F,{'idle':[(3,0),(3,1),(3,2),(3,1)],'walk':[(0,4),(0,5),(0,6),(0,7),(0,8),(0,9)],
+              'attack':[(1,2),(1,3),(1,7),(1,8),(1,9)],'backstab':[(3,3),(3,4),(1,4),(1,5),(1,6),(1,8)],
+              'hit':[(2,0),(2,1)],'death':[(2,2),(2,3),(2,4),(2,5),(2,6),(2,7),(2,8)]})
+    manifest['assassin']=build(OUT,'assassin',G,108,'idle',{'':ident})
+    # Vlammenwerper GI: zwarte achtergrond -> rembg (boards.py); blauw = rijen 1-3, rood = rijen 4-6.
+    def gi(rows):
+        R=board_unit(SRC+'vlammenwerper-gi.png',{'r0':(rows[0][0],rows[0][1],12),'r1':(rows[1][0],rows[1][1],10),
+            'r2':(rows[2][0],rows[2][1],8)},0,2170)
+        return {'idle':R['r0'][0:3]+[R['r0'][1]],'walk':R['r0'][3:12],'attack':R['r1'][0:3],
+                'flame':R['r1'][3:7],'hit':R['r2'][0:2],'death':R['r2'][2:8]}
+    manifest['flamegi']=build(OUT,'flamegi',gi([(7,123),(123,231),(235,345)]),108,'idle',{'-blue':ident},
+        alt={'-red':gi([(366,483),(483,592),(592,707)])})
     json.dump(manifest,open(MANIFEST,'w'),indent=1)
     return manifest

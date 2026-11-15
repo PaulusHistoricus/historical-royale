@@ -11,7 +11,7 @@ const run = (state, seconds) => {
 };
 
 test('All cards have English names and an explicit role/material', () => {
-  assert.equal(CARDS.length, 12);
+  assert.equal(CARDS.length, 18);
   for (const card of CARDS) {
     assert.ok(['melee', 'ranged', 'siege', 'special'].includes(card.role), card.name);
     assert.ok(['bio', 'mechanical'].includes(card.material), card.name);
