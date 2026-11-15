@@ -235,8 +235,12 @@ export function step(state, dt) {
     for (const target of candidates) {
       if (strike.hitIds.includes(target.id) || target.x < Math.min(x0, x1) ||
           target.x > Math.max(x0, x1)) continue;
-      const damage = target.kind ? CARDS.find(c => c.type === 'p51').structureDamage
-        : CARDS.find(c => c.type === 'p51').damage;
+      const aircraft = CARDS.find(c => c.type === 'p51');
+      const pct = aircraft.minUnitDamagePct +
+        state.rng() * (aircraft.maxUnitDamagePct - aircraft.minUnitDamagePct);
+      const damage = target.kind
+        ? target.max * aircraft.towerDamagePct
+        : target.max * pct;
       const before = target.hp;
       target.hp = Math.max(0, target.hp - damage);
       strike.hitIds.push(target.id);
