@@ -42,6 +42,7 @@ jobs:
           fi
           mkdir -p cloud86-package/public cloud86-package/private
           cp -a dist/. cloud86-package/public/
+          test -f cloud86-package/public/.htaccess
           cp private/legionroyale.example.php cloud86-package/private/legionroyale.example.php
           cat > cloud86-package/private/README.txt <<'EOF'
           LEGION ROYALE - PRIVATE CONFIGURATION
@@ -83,4 +84,5 @@ jobs:
           name: legionroyale-cloud86-public-private
           path: cloud86-package/
           if-no-files-found: error
+          include-hidden-files: true   # .htaccess (cache-instellingen) moet mee
           retention-days: 30
