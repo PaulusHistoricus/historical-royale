@@ -12,7 +12,8 @@ const avatarUrl = key => `${BASE}assets/avatars/${key}.webp?v=${BUILD}`;
 const cardOf = type => CARDS.find(c => c.type === type);
 const NAMES = { melee: 'Legionary', archer: 'Archer', cannon: 'Cannon', cavalry: 'Cavalry', berserker: 'Berserker',
   horse_archer: 'Horse Archer', musket: 'Musketeer', healer: 'Priestess', samurai: 'Samurai', spy: 'Spy',
-  firethrower: 'Fire Thrower', p51: 'P-51 Mustang' };
+  firethrower: 'Fire Thrower', p51: 'P-51 Mustang',
+  spartan: 'Spartan Guardian', plague: 'Plague Doctor', banner: 'Banner Maiden', flamegi: 'Flamethrower GI', lancer: 'Steppe Lancer', assassin: 'Persian Assassin' };
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const root = document.createElement('div');
@@ -253,9 +254,11 @@ function cardPortrait(type) {
   return `<span class="lr-portrait" style="aspect-ratio:${a.width}/${CARD_ART.frameHeight};
     background:url(${BASE}assets/art/cards.png?v=${BUILD}) ${px}% 0 / ${n * fw / a.width * 100}% auto no-repeat"></span>`;
 }
+const SHORT = { horse_archer: 'Horse Archer', firethrower: 'Fire Thrower', spartan: 'Spartan', plague: 'Plague Dr.',
+  banner: 'Banner Maiden', flamegi: 'Flamethrower', lancer: 'Lancer', assassin: 'Assassin', p51: 'P-51' };
 function rewardCard(type, text) {
   return `<div class="lr-rcard"><span class="lr-rcard-art">${cardPortrait(type)}</span>
-    <img src="${artUrl('result-card')}" alt=""><b>${esc(NAMES[type])}</b><i>${text}</i></div>`;
+    <img src="${artUrl('result-card')}" alt=""><b>${esc(SHORT[type] ?? NAMES[type])}</b><i>${text}</i></div>`;
 }
 const artButton = (id, label, small) => `<button class="lr-bigbtn${small ? ' small' : ''}" id="${id}">
   <img src="${artUrl(small ? 'result-button-small' : 'result-button')}" alt=""><span>${label}</span></button>`;

@@ -25,6 +25,17 @@ sfx kiss 0.8 -17
 sfx tower-collapse 2.9 -15
 sfx fire-magic 0.95 -17
 sfx arrow 0.6 -18
+# Unit expansion 2
+for n in spear-1 spear-2; do sfx $n 0.6 -17; done
+for n in potion-1 potion-2; do sfx $n 0.9 -18; done
+sfx choir 2.3 -19
+sfx horse-death 2.3 -17
+sfx knife 0.8 -17
+sfx teleport 1.2 -19
+sfx laugh 1.1 -16
+# lussen: vlammenwerper en paardengetrappel
+ffmpeg -v error -y -ss 2 -t 3 -i "$SRC/flamethrower.mp3" -af "afade=t=in:d=0.15,afade=t=out:st=2.8:d=0.2,loudnorm=I=-20:TP=-2:LRA=11" -ac 1 -ar 44100 -b:a 80k "$OUT/flamethrower.mp3"
+ffmpeg -v error -y -ss 0.5 -t 3 -i "$SRC/gallop.mp3" -af "afade=t=in:d=0.1,afade=t=out:st=2.85:d=0.15,loudnorm=I=-22:TP=-2:LRA=11" -ac 1 -ar 44100 -b:a 80k "$OUT/gallop.mp3"
 # vuur: 3 s lus uit het midden, zacht in- en uitfaden
 ffmpeg -v error -y -ss 20 -t 3 -i "$SRC/fire.mp3" -af "afade=t=in:d=0.3,afade=t=out:st=2.6:d=0.4,loudnorm=I=-22:TP=-2:LRA=11" -ac 1 -ar 44100 -b:a 80k "$OUT/fire.mp3"
 for n in music-1 music-2 music-3; do

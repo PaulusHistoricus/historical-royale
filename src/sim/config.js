@@ -19,6 +19,9 @@ export const DEPLOY_ZONE = {
   blue: { min: 268, max: 465 },
   red: { min: 495, max: 692 },
 };
+// Valt een toren, dan schuift in die baan de zone van de aanvaller zoveel op richting de
+// tegenstander, en wordt de zone van de verdediger even veel kleiner (zie deployZone()).
+export const DEPLOY_ADVANCE = 125;
 
 export const MATCH_SECONDS = 240;
 export const OVERTIME_AT = 180;          // daarna vult energie sneller aan
@@ -49,6 +52,19 @@ export const CARDS = [
     hp: 115, damage: 18, range: 94, speed: 40, rate: 2.4, radius: 13, splashRadius: 42, burnDps: 12, burnSeconds: 3 },
   { name: 'P-51 Mustang', type: 'p51', role: 'special', material: 'mechanical', cost: 6,
     minUnitDamagePct: 0.50, maxUnitDamagePct: 0.75, towerDamagePct: 0.10, duration: 1.7 },
+  // Unit expansion 2 (zie docs/unit-expansion-2.md). Achteraan, zodat bestaande kaartindexen gelijk blijven.
+  { name: 'Spartan Guardian', type: 'spartan', role: 'melee', material: 'bio', cost: 4,
+    hp: 340, damage: 23, range: 26, speed: 32, rate: 1.35, radius: 17, shieldPct: 0.4, shieldRange: 65 },
+  { name: 'Plague Doctor', type: 'plague', role: 'ranged', material: 'bio', cost: 4, support: true,
+    hp: 110, damage: 12, range: 105, speed: 40, rate: 2.3, radius: 12, poisonDps: 8, poisonSeconds: 4, spreadRange: 35 },
+  { name: 'Banner Maiden', type: 'banner', role: 'melee', material: 'bio', cost: 5, support: true,
+    hp: 175, damage: 22, range: 18, speed: 45, rate: 1.4, radius: 13, auraRange: 95, auraSpeed: 0.15, auraAttack: 0.10 },
+  { name: 'Flamethrower GI', type: 'flamegi', role: 'ranged', material: 'bio', cost: 5,
+    hp: 170, damage: 14, range: 75, speed: 31, rate: 0.4, radius: 14, burnDps: 6, burnSeconds: 2, structurePct: 0.3 },
+  { name: 'Steppe Lancer', type: 'lancer', role: 'melee', material: 'bio', cost: 4,
+    hp: 205, damage: 41, range: 22, speed: 105, rate: 1.1, radius: 19, chargeBonus: 20, chargeDistance: 65, knockback: 30 },
+  { name: 'Persian Assassin', type: 'assassin', role: 'melee', material: 'bio', cost: 3,
+    hp: 105, damage: 38, range: 12, speed: 90, rate: 0.9, radius: 11, backstabBonus: 0.75, supportDetect: 160 },
 
 ];
 
@@ -70,3 +86,6 @@ export const AI = {
   spawnMin: 540,
   spawnMax: 692,
 };
+
+// Ondersteuners: de Perzische sluipmoordenares zoekt deze eerst op.
+export const SUPPORT_TYPES = ['healer', 'banner', 'plague'];

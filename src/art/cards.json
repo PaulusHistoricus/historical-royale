@@ -85,6 +85,48 @@
    "gemY": 27.4,
    "gemR": 20.6,
    "width": 196
+  },
+  "spartan": {
+   "frame": 12,
+   "gemX": 32.4,
+   "gemY": 27.4,
+   "gemR": 20.6,
+   "width": 196
+  },
+  "plague": {
+   "frame": 13,
+   "gemX": 32.4,
+   "gemY": 27.4,
+   "gemR": 20.6,
+   "width": 196
+  },
+  "banner": {
+   "frame": 14,
+   "gemX": 32.4,
+   "gemY": 27.4,
+   "gemR": 20.6,
+   "width": 196
+  },
+  "flamegi": {
+   "frame": 15,
+   "gemX": 32.4,
+   "gemY": 27.4,
+   "gemR": 20.6,
+   "width": 196
+  },
+  "lancer": {
+   "frame": 16,
+   "gemX": 32.4,
+   "gemY": 27.4,
+   "gemR": 20.6,
+   "width": 196
+  },
+  "assassin": {
+   "frame": 17,
+   "gemX": 32.4,
+   "gemY": 27.4,
+   "gemR": 20.6,
+   "width": 196
   }
  }
 }

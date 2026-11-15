@@ -539,5 +539,288 @@
   "textures": [
    "healer"
   ]
+ },
+ "spartan": {
+  "frameWidth": 187,
+  "frameHeight": 122,
+  "originX": 0.4011,
+  "originY": 0.9836,
+  "anims": {
+   "idle": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "walk": [
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "attack": [
+    10,
+    11,
+    12,
+    13
+   ],
+   "shield_wall": [
+    14,
+    15,
+    16
+   ],
+   "hit": [
+    17,
+    18
+   ],
+   "death": [
+    19,
+    20,
+    21,
+    22,
+    23
+   ]
+  },
+  "textures": [
+   "spartan-blue",
+   "spartan-red"
+  ]
+ },
+ "plague": {
+  "frameWidth": 148,
+  "frameHeight": 128,
+  "originX": 0.5,
+  "originY": 0.9844,
+  "anims": {
+   "idle": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "walk": [
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "attack": [
+    10,
+    11,
+    12,
+    13,
+    14
+   ],
+   "hit": [
+    15,
+    16
+   ],
+   "death": [
+    17,
+    18,
+    19,
+    20,
+    21,
+    22
+   ]
+  },
+  "textures": [
+   "plague"
+  ]
+ },
+ "banner": {
+  "frameWidth": 164,
+  "frameHeight": 166,
+  "originX": 0.4024,
+  "originY": 0.988,
+  "anims": {
+   "idle": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "walk": [
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "attack": [
+    10,
+    11,
+    12,
+    13
+   ],
+   "rally": [
+    14,
+    15,
+    16
+   ],
+   "hit": [
+    17
+   ],
+   "death": [
+    18,
+    19,
+    20
+   ]
+  },
+  "textures": [
+   "banner-blue",
+   "banner-red"
+  ]
+ },
+ "lancer": {
+  "frameWidth": 207,
+  "frameHeight": 152,
+  "originX": 0.4203,
+  "originY": 0.9868,
+  "anims": {
+   "idle": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "walk": [
+    4,
+    5,
+    6,
+    7
+   ],
+   "charge": [
+    8,
+    9,
+    10
+   ],
+   "attack": [
+    11,
+    12,
+    13
+   ],
+   "hit": [
+    14
+   ],
+   "death": [
+    15,
+    16
+   ]
+  },
+  "textures": [
+   "lancer-blue",
+   "lancer-red"
+  ]
+ },
+ "assassin": {
+  "frameWidth": 158,
+  "frameHeight": 117,
+  "originX": 0.3924,
+  "originY": 0.9829,
+  "anims": {
+   "idle": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "walk": [
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "attack": [
+    10,
+    11,
+    12,
+    13,
+    14
+   ],
+   "backstab": [
+    15,
+    16,
+    17,
+    18,
+    19,
+    20
+   ],
+   "hit": [
+    21,
+    22
+   ],
+   "death": [
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29
+   ]
+  },
+  "textures": [
+   "assassin"
+  ]
+ },
+ "flamegi": {
+  "frameWidth": 320,
+  "frameHeight": 113,
+  "originX": 0.3,
+  "originY": 0.9823,
+  "anims": {
+   "idle": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "walk": [
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+   ],
+   "attack": [
+    13,
+    14,
+    15
+   ],
+   "flame": [
+    16,
+    17,
+    18,
+    19
+   ],
+   "hit": [
+    20,
+    21
+   ],
+   "death": [
+    22,
+    23,
+    24,
+    25,
+    26,
+    27
+   ]
+  },
+  "textures": [
+   "flamegi-blue",
+   "flamegi-red"
+  ]
  }
 }

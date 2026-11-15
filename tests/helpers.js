@@ -45,7 +45,9 @@ export function run(state, seconds, onTick) {
       } else if (u.state === 'attack') {
         const target = findById(state, u.targetId);
         // Het doelwit mag ná de beslissing nog één stap zijn weggelopen.
-        if (target) assert.ok(gap(u, target) <= (u.card.type === 'healer' && target.side === u.side ? u.card.healRange : u.card.range) + 2, `eenheid ${u.id} valt aan buiten bereik`);
+        // Uitzondering: een doelwit dat deze tick door een Steppe Lancer is teruggeduwd.
+        const pushed = events.some(e => e.type === 'knockback' && (e.id === u.targetId || e.id === u.id));
+        if (target && !pushed) assert.ok(gap(u, target) <= (u.card.type === 'healer' && target.side === u.side ? u.card.healRange : u.card.range) + 2, `eenheid ${u.id} valt aan buiten bereik`);
         const waited = (sinceHit.get(u.id) ?? 0) + TICK;
         sinceHit.set(u.id, waited);
         assert.ok(u.card.type === 'spy' || waited <= u.card.rate + 2 * TICK, `eenheid ${u.id} (${u.card.name}) staat ${waited.toFixed(2)}s in 'attack' zonder te slaan`);
