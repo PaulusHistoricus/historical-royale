@@ -161,6 +161,8 @@ export function chooseTarget(state, unit) {
     if (!best || Math.abs(dx) < Math.abs(best.x - unit.x) ||
         (Math.abs(dx) === Math.abs(best.x - unit.x) && e.id < best.id)) best = e;
   }
+  // A spy can only charm eligible biological units, never structures.
+  if (unit.card.type === 'spy') return best;
   return best ?? objectiveFor(state, unit);
 }
 
@@ -236,7 +238,7 @@ export function step(state, dt) {
       if (strike.hitIds.includes(target.id) || target.x < Math.min(x0, x1) ||
           target.x > Math.max(x0, x1)) continue;
       const aircraft = CARDS.find(c => c.type === 'p51');
-      const pct = aircraft.minUnitDamagePct +
+      const pct = target.kind ? 0 : aircraft.minUnitDamagePct +
         state.rng() * (aircraft.maxUnitDamagePct - aircraft.minUnitDamagePct);
       const damage = target.kind
         ? target.max * aircraft.towerDamagePct
