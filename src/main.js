@@ -360,8 +360,8 @@ class Battle extends Phaser.Scene {
     const g = this.add.graphics().setDepth(3000);
     g.fillStyle(0x1b130b, 0.9).fillRoundedRect(W / 2 - 220, 72, 440, 120, 14);
     g.lineStyle(3, 0xd9b26a).strokeRoundedRect(W / 2 - 220, 72, 440, 120, 14);
-    this.text(W / 2, 112, winner === 'blue' ? 'OVERWINNING!' : 'VERLOREN!', 34, winner === 'blue' ? '#c4f3c0' : '#ffc0b5').setOrigin(0.5).setDepth(3001);
-    this.text(W / 2, 160, 'Tik om opnieuw te spelen', 15).setOrigin(0.5).setDepth(3001);
+    this.text(W / 2, 112, winner === 'blue' ? 'VICTORY!' : 'DEFEAT!', 34, winner === 'blue' ? '#c4f3c0' : '#ffc0b5').setOrigin(0.5).setDepth(3001);
+    this.text(W / 2, 160, 'Tap to play again', 15).setOrigin(0.5).setDepth(3001);
     for (const t of this.texts) t.setResolution(clamp(Math.ceil(this.view.zoom), 1, 4));
     this.selected = null;
     this.time.delayedCall(400, () => this.input.once('pointerdown', () => this.scene.restart()));
