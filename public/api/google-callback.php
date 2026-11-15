@@ -26,21 +26,13 @@ try {
     ]);
     $idToken = $tokens['id_token'] ?? null;
     if (!is_string($idToken) || strlen($idToken) > 10000) back('invalid_token');
-    // Google validates the signature/issuer of the ID token on its own trusted HTTPS endpoint.
-    $claims = googleRequest('https://oauth2.googleapis.com/tokeninfo?id_token=' . rawurlencode($idToken));
-    $issuer = $claims['iss'] ?? '';
-    if (!in_array($issuer, ['accounts.google.com', 'https://accounts.google.com'], true) ||
-        !hash_equals($c['google_client_id'], (string)($claims['aud'] ?? '')) ||
-        (int)($claims['exp'] ?? 0) < time() ||
-        (string)($claims['nonce'] ?? '') !== $stored['nonce'] ||
-        !isset($claims['sub']) || !is_string($claims['sub']) ||
-        strlen($claims['sub']) > 255) back('invalid_identity');
+    $claims = verifyGoogleIdToken($idToken, $c['google_client_id'], $stored['nonce']);
     if (!in_array($claims['email_verified'] ?? false, [true, 'true', '1', 1], true)) back('email_unverified');
 
     $sub = $claims['sub'];
     $email = filter_var($claims['email'] ?? '', FILTER_VALIDATE_EMAIL) ?: null;
     $name = trim((string)($claims['name'] ?? 'Player'));
-    $name = mb_substr($name !== '' ? $name : 'Player', 0, 40);
+    $name = function_exists('mb_substr') ? mb_substr($name !== '' ? $name : 'Player', 0, 40) : substr($name !== '' ? $name : 'Player', 0, 40);
     $avatar = (string)($claims['picture'] ?? '');
     if (!str_starts_with($avatar, 'https://') || strlen($avatar) > 512) $avatar = null;
     $pdo = db();
