@@ -245,37 +245,46 @@ window.addEventListener('lr:session', () => {
 
 // ---------- Beloningen na een gevecht ----------
 const artUrl = name => `${BASE}assets/art/${name}.webp?v=${BUILD}`;
-// Beloningskaart: ons kaartportret in de goudlijst uit result-card.webp.
+// Beloningskaart: ons kaartportret in de goudlijst (result-card.webp, portretgat doorzichtig).
+// Portret schaalt mee met de lijst (procenten), ingezoomd zodat de eigen kaartrand en het energiejuweel wegvallen.
+function cardPortrait(type) {
+  const a = CARD_ART.cards[type], fw = CARD_ART.frameWidth, n = Object.keys(CARD_ART.cards).length;
+  const px = (a.frame * fw + (fw - a.width) / 2) / (n * fw - a.width) * 100;
+  return `<span class="lr-portrait" style="aspect-ratio:${a.width}/${CARD_ART.frameHeight};
+    background:url(${BASE}assets/art/cards.png?v=${BUILD}) ${px}% 0 / ${n * fw / a.width * 100}% auto no-repeat"></span>`;
+}
 function rewardCard(type, text) {
-  return `<div class="lr-rcard"><span class="lr-rcard-art">${cardImg(type, 150)}</span>
+  return `<div class="lr-rcard"><span class="lr-rcard-art">${cardPortrait(type)}</span>
     <img src="${artUrl('result-card')}" alt=""><b>${esc(NAMES[type])}</b><i>${text}</i></div>`;
 }
+const artButton = (id, label, small) => `<button class="lr-bigbtn${small ? ' small' : ''}" id="${id}">
+  <img src="${artUrl(small ? 'result-button-small' : 'result-button')}" alt=""><span>${label}</span></button>`;
 function showResult({ winner, reward, error, guest }) {
   const win = winner === 'blue';
   const frags = Object.entries(reward?.fragments ?? {});
   open('result', `
-    <div class="lr-banner ${win ? 'win' : 'loss'}">${win ? `<img src="${artUrl('result-banner-victory')}" alt="Victory">`
-      : `<img src="${artUrl('result-banner-blank')}" alt=""><span>DEFEAT</span>`}</div>
+    <div class="lr-banner ${win ? 'win' : 'loss'}"><img src="${artUrl('result-banner')}" alt=""><span>${win ? 'VICTORY' : 'DEFEAT'}</span></div>
     ${reward ? `
-      ${frags.length ? `<div class="lr-ribbon"><img src="${artUrl('result-ribbon')}" alt="Battle rewards"></div>
-        <div class="lr-rcards">${frags.map(([t, n]) => rewardCard(t, `+${n}`)).join('')}</div>` : ''}
-      <div class="lr-coinbox"><img src="${artUrl('result-coins')}" alt="">
-        <div><small>COINS</small><b>+${reward.coinsGained}</b><small>+${reward.xpGained} XP</small></div></div>
+      <div class="lr-ribbon"><img src="${artUrl('result-ribbon')}" alt="Battle rewards"></div>
+      <div class="lr-rrow">
+        ${frags.length ? `<div class="lr-rcards">${frags.map(([t, n]) => rewardCard(t, `+${n}`)).join('')}</div>` : ''}
+        <div class="lr-coinbox"><img src="${artUrl('result-coins')}" alt="">
+          <div><small>COINS</small><b>+${reward.coinsGained}</b></div></div></div>
       <div class="lr-level"><b>Level ${reward.level}</b><span class="lr-xpbar"><i style="width:${reward.xpForNext ? Math.round(100 * reward.xpInLevel / reward.xpForNext) : 100}%"></i></span>
-        <small>${reward.xpForNext ? `${reward.xpInLevel} / ${reward.xpForNext} XP` : 'Max level'}</small></div>
+        <small>${reward.xpForNext ? `${reward.xpInLevel} / ${reward.xpForNext} XP` : 'Max level'}</small><em class="lr-xpgain">+${reward.xpGained} XP</em></div>
       ${reward.level > reward.levelBefore ? `<p class="lr-levelup">⭐ Level up! You reached level ${reward.level} (+${100 * (reward.level - reward.levelBefore)} 🪙)</p>` : ''}
       ${(reward.achievements ?? []).map(a => `<p class="lr-ach-new">🏆 <b>${esc(a.title)}</b> — ${esc(a.description)}</p>`).join('')}`
     : `<p class="lr-muted lr-noreward">${guest ? 'Sign in to earn XP, coins and card fragments.' : esc(error || 'No rewards for this battle.')}</p>`}
-    <div class="lr-result-actions">
-      <button class="lr-bigbtn" id="lr-again"><img src="${artUrl('result-button')}" alt=""><span>${win ? 'Play again' : 'Try again'}</span></button>
-      <button class="lr-bigbtn small" id="lr-menu"><img src="${artUrl('result-button')}" alt=""><span>Menu</span></button></div>`, el => {
+    <div class="lr-result-actions">${artButton('lr-again', win ? 'Play again' : 'Try again')}${artButton('lr-menu', 'Menu', true)}</div>`, el => {
     el.querySelector('.lr-close').remove();
     // Eerste halve seconde negeren: een tik die nog voor het gevecht bedoeld was, telt niet.
     const go = ev => () => { if (performance.now() - openedAt < 600) return; close(); window.dispatchEvent(new Event(ev)); };
     el.querySelector('#lr-again').onclick = go('lr:again');
     el.querySelector('#lr-menu').onclick = go('lr:to-menu');
   });
-  root.querySelector('.lr-screen').style.setProperty('--result-bg', `url(${artUrl('result-bg')})`);
+  const scr = root.querySelector('.lr-screen');
+  scr.style.setProperty('--result-bg', `url(${artUrl('result-bg')})`);
+  scr.style.setProperty('--result-panel', `url(${artUrl('result-panel')})`);
 }
 
 // ---------- E-mail-wijzigingslink (#email_change_token=...) ----------
