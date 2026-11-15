@@ -260,6 +260,16 @@ export function step(state, dt) {
   for (const u of state.units) {
     if (u.hp <= 0) continue;
     u.cd = Math.max(0, u.cd - dt);
+    // Schaduwsamoerai: na recloakTime zonder aanval weer onzichtbaar, met nieuwe hinderlaagbonus.
+    if (u.card.type === 'samurai' && !u.hidden) {
+      u.cloakTimer = (u.cloakTimer ?? u.card.recloakTime) - dt;
+      if (u.cloakTimer <= 0) {
+        u.hidden = true;
+        u.firstStrikeDone = false;
+        u.cloakTimer = u.card.recloakTime;
+        state.events.push({ type: 'cloak', id: u.id, side: u.side });
+      }
+    }
     // Genezeres geneest alleen biologische bondgenoten, nooit zichzelf.
     if (u.card.type === 'healer' && u.cd <= 0) {
       const allies = state.units.filter(a => a.id !== u.id && a.side === u.side && a.hp > 0 &&
@@ -302,7 +312,8 @@ export function step(state, dt) {
         u.state = 'attack';
         if (u.cd <= 0) {
           hits.push({ attacker: u, target });
-          if (u.hidden) u.hidden = false; // schaduwsamoerai wordt zichtbaar bij eerste aanval
+          if (u.hidden) u.hidden = false; // schaduwsamoerai wordt zichtbaar bij aanval
+          if (u.card.type === 'samurai') u.cloakTimer = u.card.recloakTime;
           u.cd = u.card.rate;
         }
       }

@@ -1,0 +1,9 @@
+# Legion Royale op Apache (Cloud86/Plesk)
+# index.html en version.json nooit cachen: dan ziet iedereen meteen een nieuwe versie.
+<FilesMatch "^(index\.html|version\.json)$">
+  Header set Cache-Control "no-cache, must-revalidate"
+</FilesMatch>
+# Plaatjes en scripts mogen lang gecachet worden: hun URL verandert bij elke versie.
+<FilesMatch "\.(js|css|png|jpg|webp)$">
+  Header set Cache-Control "public, max-age=31536000"
+</FilesMatch>
