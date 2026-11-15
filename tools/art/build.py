@@ -12,6 +12,9 @@ from units import build_units
 from world import build_world
 from cards import build_cards
 from bar import build_bar
+from effects import build_effects
+from screens import build_screens
+from reference import build_reference
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 SRC = os.path.join(ROOT, 'art', 'source') + '/'
@@ -21,5 +24,8 @@ build_units(SRC, OUT, os.path.join(ROOT, 'src', 'art', 'units.json'))
 build_world(SRC, OUT, os.path.join(ROOT, 'src', 'art', 'world.json'))
 build_cards(SRC, OUT, os.path.join(ROOT, 'src', 'art', 'cards.json'))
 build_bar(SRC, OUT, os.path.join(ROOT, 'src', 'art', 'cardbar.json'))
+build_effects(SRC, OUT, os.path.join(ROOT, 'src', 'art', 'effects.json'))
+build_screens(SRC, OUT, os.path.join(ROOT, 'src', 'art', 'screens.json'))
+build_reference(OUT, os.path.join(ROOT, 'src', 'art', 'units.json'), os.path.join(ROOT, 'art', 'reference'))
 for f in sorted(os.listdir(OUT)):
     print(f'{f:24s} {os.path.getsize(os.path.join(OUT, f)) // 1024:5d} kB')

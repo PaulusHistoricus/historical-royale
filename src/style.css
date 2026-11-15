@@ -14,3 +14,14 @@ canvas { display: block; }
 .below h1 { font-size: 24px; letter-spacing: .12em; text-transform: uppercase; margin: 8px 0; color: #f3d48c; }
 .below p { color: #d6c6a2; margin: 8px 0 18px; }
 .ad { min-height: 100px; }
+
+/* Laadscherm */
+#splash { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; align-content: center; gap: 4vh;
+  background: radial-gradient(circle at 50% 45%, #3a2814, #0d0805 75%); cursor: pointer; transition: opacity .5s ease, visibility .5s; }
+#splash.out { opacity: 0; visibility: hidden; }
+#splash img { width: min(84vw, 140vh, 760px); height: auto; border-radius: 28px; box-shadow: 0 14px 40px #000c, 0 0 0 3px #c99a45;
+  animation: lrIntroLogo 1.6s ease both; }
+.splash-bar { width: min(60vw, 420px); height: 10px; border-radius: 6px; background: #2a1d10; box-shadow: inset 0 0 0 2px #8a6a35; overflow: hidden; }
+.splash-bar span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #c98f2a, #ffe08a); transition: width .2s; }
+@keyframes lrIntroLogo { 0% { opacity: 0; transform: scale(.86) } 35% { opacity: 1; transform: scale(1) } 100% { opacity: 1; transform: scale(1.03) } }
+@media (prefers-reduced-motion: reduce) { #splash img { animation: none } }

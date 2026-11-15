@@ -140,5 +140,21 @@ def build_units(SRC, OUT, MANIFEST):
     manifest['horse_archer']=build(OUT,'horse_archer',G,140,'idle',{'':ident})
     G=rgba_unit(SRC+'musketier.png',ROWS,{(1,1):[376],(2,2):[552,722],(4,0):[176,340]})
     manifest['musket']=build(OUT,'musket',G,114,'idle',{'-blue':ident,'-red':toredC})
+    # Animatieborden op donkere achtergrond (zie boards.py). Coördinaten = bronpixels.
+    from boards import board_unit
+    tored = lambda rgb,m: hue_shift(rgb,m,358,218,minsat=.42,width=16)
+    G=board_unit(SRC+'vuurwerper-bord.png',{'idle':(8,150,4),'walk':(163,296,6),
+        'attack':(308,448,5,420,1265),'hit':(738,871,3),'death':(883,1022,6)},420,1440,fx={'death':{4,5}})
+    manifest['firethrower']=build(OUT,'firethrower',G,110,'idle',{'-red':ident,'-blue':toblue})
+    G=board_unit(SRC+'samoerai-bord.png',{'idle':(50,172,4),'walk':(200,308,6),'cloak':(340,452,6),
+        'attack':(486,588,6),'reveal':(618,725,4),'hit':(755,860,3),'death':(890,1010,6)},570,1432,
+        fx={'cloak':{4,5},'reveal':{0},'death':{4,5}})
+    manifest['samurai']=build(OUT,'samurai',G,112,'idle',{'-red':ident,'-blue':toblue})
+    G=board_unit(SRC+'spion-bord.png',{'idle':(5,158,4,410,1110),'walk':(168,302,6),'attack':(312,440,6),
+        'charm':(447,580,8),'hit':(700,826,3,410,930),'death':(835,990,6)},410,1528,fx={'death':{4,5}})
+    manifest['spy']=build(OUT,'spy',G,110,'idle',{'':ident})
+    G=board_unit(SRC+'genezeres-bord.png',{'idle':(5,155,4,400,1160),'walk':(165,312,6),'heal':(320,485,6),
+        'attack':(490,640,6),'hit':(648,790,3,400,880),'death':(798,970,7)},400,1532,fx={'death':{5,6}})
+    manifest['healer']=build(OUT,'healer',G,110,'idle',{'':ident})
     json.dump(manifest,open(MANIFEST,'w'),indent=1)
     return manifest

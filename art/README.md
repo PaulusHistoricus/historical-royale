@@ -46,6 +46,19 @@ kleine uitsteeksels (een lans, een pijl) blijven bij het frame waar ze bij horen
 juweel overheen met de **echte** kosten uit `config.js`, zodat kaart en spel nooit uit elkaar lopen.
 Een nieuwe kaart: voeg hem toe aan `kaarten.png` (zelfde stijl, juweel linksboven) en aan `ORDER` in `cards.py`.
 
+## Animatieborden (v0.12)
+
+`vuurwerper-bord.png`, `samoerai-bord.png`, `spion-bord.png` en `genezeres-bord.png` zijn borden op een donkere
+achtergrond. `boards.py` vindt per paneel de frames en haalt het figuur los met **rembg** (`pip install "rembg[cpu]"`,
+model u2net); vuur, magie en gloed worden er met een zwart-sleutel bij gehouden. Paneelcoördinaten staan in `units.py`.
+Het vuur van de vuurpot (`fx-fire.jpg`) en de P-51 (`p51.png`) staan in `effects.py`; menu en logo in `screens.py`.
+
+## Referentiebladen
+
+`art/reference/` bevat per eenheid één overzichtsblad met alle animaties (naam, aantal frames, genummerd).
+Gebruik dat als voorbeeld wanneer je een nieuwe beweging laat maken: zelfde figuur, zelfde formaat, kijkend naar rechts,
+één rij per animatie. Deze bladen worden bij elke `build.py` opnieuw gemaakt.
+
 ## Tips voor nieuwe art
 
 - Vraag om **één personage per vak, op een effen witte achtergrond, met ruimte tussen de frames**, kijkend naar rechts.
