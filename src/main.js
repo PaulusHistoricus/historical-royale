@@ -37,7 +37,7 @@ const art = file => ART + file + '?v=' + BUILD;
 const AUDIO = import.meta.env.BASE_URL + 'assets/audio/';
 const SFX_FILES = ['sword-1', 'sword-2', 'sword-3', 'axe', 'death-male-1', 'death-male-2', 'death-collapse',
   'death-female-1', 'death-female-2', 'death-female-3', 'musket', 'machine-gun', 'explosion', 'heal', 'magic-wind',
-  'small-explosion', 'fire', 'kiss', 'tower-collapse'];
+  'small-explosion', 'fire', 'kiss', 'tower-collapse', 'fire-magic', 'arrow'];
 const MUSIC = { menu: 'music-2', battle: ['music-1', 'music-3'] };
 const SFX = {   // groep -> [bestanden, volume, minimale tijd tussen twee keer (ms)]
   sword: [['sword-1', 'sword-2', 'sword-3'], 0.45, 70],
@@ -52,6 +52,8 @@ const SFX = {   // groep -> [bestanden, volume, minimale tijd tussen twee keer (
   pot: [['small-explosion'], 0.5, 90],
   kiss: [['kiss'], 0.6, 200],
   collapse: [['tower-collapse'], 0.7, 250],
+  fireMagic: [['fire-magic'], 0.45, 250],
+  arrow: [['arrow'], 0.4, 90],
 };
 const FEMALE = new Set(['healer', 'spy']);
 let autoFullscreenDone = false;
@@ -650,6 +652,7 @@ class Battle extends Phaser.Scene {
         if (e.kind === 'berserker') sfx(this, 'axe');
         else if (MELEE_KINDS.has(e.kind)) sfx(this, 'sword');
         else if (e.kind === 'musket') sfx(this, 'musket');
+        else if (e.kind === 'healer') sfx(this, 'fireMagic');   // aanval van de priesteres
       } else if (e.type === 'death') {
         const view = this.views.get(e.id);
         if (view && this.vanishing.has(e.id)) {   // spion na overname: geen sterfscène, gewoon weg
@@ -706,7 +709,7 @@ class Battle extends Phaser.Scene {
     else { x0 = e.from.x; y0 = this.structureTop(e.attackerId) + 10; }
     const dist = Math.abs(e.to.x - x0);
     const kind = { cannon: 'ball', musket: 'bullet', healer: 'bolt', firethrower: 'pot' }[e.kind] ?? 'arrow';
-    this.projectiles.push({ kind, x0, y0, x1: e.to.x, y1: targetY,
+    this.projectiles.push({ kind, archer: e.kind === 'archer' || e.kind === 'horse_archer', x0, y0, x1: e.to.x, y1: targetY,
       t: 0, dur: Math.max(e.kind === 'musket' ? 0.06 : 0.12, dist / ({ cannon: 520, musket: 1600, healer: 900, firethrower: 420 }[e.kind] ?? 760)),
       arc: { cannon: 26, musket: 0, healer: 0, firethrower: 34 }[e.kind] ?? 10 });
   }
@@ -964,6 +967,7 @@ class Battle extends Phaser.Scene {
         return false;
       }
       if (k >= 1 && p.kind === 'ball') sfx(this, 'boom');
+      if (k >= 1 && p.kind === 'arrow' && p.archer) sfx(this, 'arrow');   // pijl van boogschutters (torens niet: te veel)
       if (k >= 1) {
         this.sparks.push(p.kind === 'ball'
           ? { x: p.x1, y: p.y1 + 8, t: 0, dur: 0.38, color: 0xffa040, big: true }
