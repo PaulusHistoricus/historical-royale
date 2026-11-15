@@ -20,6 +20,10 @@ sfx machine-gun 1.8 -17
 sfx explosion 1.5 -16
 sfx heal 1.6 -18
 sfx magic-wind 1.8 -19
+sfx small-explosion 0.6 -17
+sfx kiss 0.8 -17
+# vuur: 3 s lus uit het midden, zacht in- en uitfaden
+ffmpeg -v error -y -ss 20 -t 3 -i "$SRC/fire.mp3" -af "afade=t=in:d=0.3,afade=t=out:st=2.6:d=0.4,loudnorm=I=-22:TP=-2:LRA=11" -ac 1 -ar 44100 -b:a 80k "$OUT/fire.mp3"
 for n in music-1 music-2 music-3; do
   ffmpeg -v error -y -i "$SRC/$n.mp3" -af "loudnorm=I=-20:TP=-1.5:LRA=11" -ac 2 -ar 44100 -b:a 96k "$OUT/$n.mp3"
 done
