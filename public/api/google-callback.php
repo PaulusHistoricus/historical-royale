@@ -30,7 +30,9 @@ try {
     if (!in_array($claims['email_verified'] ?? false, [true, 'true', '1', 1], true)) back('email_unverified');
 
     $sub = $claims['sub'];
-    $email = filter_var($claims['email'] ?? '', FILTER_VALIDATE_EMAIL) ?: null;
+    $emailValue = filter_var($claims['email'] ?? '', FILTER_VALIDATE_EMAIL);
+    if (!is_string($emailValue) || strlen($emailValue) > 254) back('invalid_identity');
+    $email = strtolower($emailValue);
     $name = trim((string)($claims['name'] ?? 'Player'));
     $name = function_exists('mb_substr') ? mb_substr($name !== '' ? $name : 'Player', 0, 40) : substr($name !== '' ? $name : 'Player', 0, 40);
     $avatar = (string)($claims['picture'] ?? '');
