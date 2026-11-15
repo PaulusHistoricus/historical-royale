@@ -81,3 +81,33 @@ test('Fire thrower applies damage-over-time to nearby enemies', () => {
   assert.ok(foe.burnRemaining > 0);
   assert.ok(adjacent.burnRemaining > 0);
 });
+
+test('Samurai cloaks again after it stops fighting, and the next ambush gets the bonus again', () => {
+  const s = createBattle({ ai: false });
+  const samurai = addUnit(s, 'blue', 0, idx('samurai'), 390);
+  const foe = addUnit(s, 'red', 0, idx('archer'), 440);
+  foe.hp = 40;                              // eerste hinderlaag doodt hem direct
+  let events = run(s, 0.5);
+  const first = events.find(e => e.type === 'hit' && e.attackerId === samurai.id);
+  assert.equal(first.damage, 40);
+  assert.equal(samurai.hidden, false, 'zichtbaar na de aanval');
+  // even niet vechten -> weer in de schaduw
+  events = run(s, samurai.card.recloakTime + 0.2);
+  assert.ok(events.some(e => e.type === 'cloak' && e.id === samurai.id));
+  assert.equal(samurai.hidden, true);
+  // volgende vijand: weer hinderlaagbonus
+  const next = addUnit(s, 'red', 0, idx('melee'), samurai.x + 40);
+  next.hp = next.max = 5000;
+  events = run(s, 1);
+  const ambush = events.find(e => e.type === 'hit' && e.attackerId === samurai.id && e.targetId === next.id);
+  assert.equal(ambush.damage, Math.round(samurai.card.damage * samurai.card.stealthBonus));
+});
+
+test('Samurai stays visible while it keeps fighting', () => {
+  const s = createBattle({ ai: false });
+  const samurai = addUnit(s, 'blue', 0, idx('samurai'), 390);
+  const foe = addUnit(s, 'red', 0, idx('melee'), 430);
+  foe.hp = foe.max = 5000;
+  run(s, 0.5);
+  for (let i = 0; i < 6 * 60; i++) { step(s, 1 / 60); assert.equal(samurai.hidden, false); }
+});

@@ -12,6 +12,9 @@ export default defineConfig({
     __BUILD__: JSON.stringify(build),
   },
   plugins: [{
+    name: 'build-in-html',
+    transformIndexHtml: html => html.replaceAll('__BUILD__', build),
+  }, {
     name: 'version-json',
     generateBundle() {
       this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ version: pkg.version, build }) });

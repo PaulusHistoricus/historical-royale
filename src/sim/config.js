@@ -40,9 +40,9 @@ export const CARDS = [
   { name: 'Musketeer', type: 'musket', role: 'ranged', material: 'bio', cost: 4, hp: 140, damage: 90, range: 124, speed: 39, rate: 2.8, radius: 13 },
   // Vijf nieuwe kaarten. Speciale P-51 is een eenmalige baan-aanval, geen permanente eenheid.
   { name: 'Egyptian Healer', type: 'healer', role: 'special', material: 'bio', cost: 2,
-    hp: 95, damage: 9, range: 105, speed: 43, rate: 2.0, radius: 12, healPct: 0.03, healRange: 115 },
+    hp: 95, damage: 9, range: 105, speed: 43, rate: 1.5, radius: 12, healPct: 0.08, healRange: 115 },
   { name: 'Shadow Samurai', type: 'samurai', role: 'melee', material: 'bio', cost: 4,
-    hp: 170, damage: 54, range: 14, speed: 75, rate: 1.0, radius: 13, stealthBonus: 1.5 },
+    hp: 170, damage: 54, range: 14, speed: 75, rate: 1.0, radius: 13, stealthBonus: 1.5, recloakTime: 2.5 },
   { name: 'Spy', type: 'spy', role: 'special', material: 'bio', cost: 5,
     hp: 100, damage: 0, range: 24, speed: 59, rate: 2.0, radius: 12, channelTime: 2.0, maxStealCost: 5 },
   { name: 'Fire Thrower', type: 'firethrower', role: 'ranged', material: 'bio', cost: 4,

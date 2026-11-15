@@ -9,7 +9,7 @@ import CARD_ART from './art/cards.json';
 import BAR_ART from './art/cardbar.json';
 import FX_ART from './art/effects.json';
 import SCREEN_ART from './art/screens.json';
-import { VERSION_LABEL, ensureLatestBuild } from './version.js';
+import { VERSION_LABEL, BUILD, ensureLatestBuild } from './version.js';
 const { createBattle, deploy, step, findById, gap } = sim;
 
 // Dit bestand bevat ALLEEN weergave en invoer. Alle spelregels (lopen, doelwit
@@ -26,6 +26,9 @@ const { createBattle, deploy, step, findById, gap } = sim;
 
 const TEX = 2;                      // textures zijn gemaakt op 2x wereldresolutie
 const ART = import.meta.env.BASE_URL + 'assets/art/';
+// Art staat in public/ en heeft geen hash in de bestandsnaam. Het ?v=<build>-achtervoegsel
+// dwingt browsers na elke update de nieuwe versie op te halen (anders: verschoven kaarten e.d.).
+const art = file => ART + file + '?v=' + BUILD;
 const SIM_STEP = 1 / 60;            // vaste simulatiestap, onafhankelijk van de framerate
 const TEAM = { blue: 0x4f9be8, red: 0xe0513f };
 const ZONE = DEPLOY_ZONE.blue;
@@ -36,6 +39,10 @@ const BAR_OVERLAP = 266;            // bovenrand kaartenbalk; banen en kastelen 
 const PORTRAIT_TOP = 120;           // kopstrook in portret
 const BAR_MAX_LANDSCAPE = 0.33;     // balkschaal liggend/desktop: balk ≈ 30% van de hoogte, veld ≈ 70%
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+// Geluid aan/uit wordt onthouden. Er is nog geen geluid, maar elk toekomstig geluid via
+// Phaser (this.sound) volgt deze instelling automatisch.
+const soundOn = () => { try { return localStorage.getItem('lr-sound') !== 'off'; } catch { return true; } };
+const setSoundOn = (game, on) => { try { localStorage.setItem('lr-sound', on ? 'on' : 'off'); } catch {} game.sound.mute = !on; };
 
 // Waar voeten en gebouwen in de arena-art staan (wereldpixels).
 const footY = u => LANES[u.lane] + 8 + (u.y - LANES[u.lane]) * 0.6;
@@ -61,26 +68,26 @@ class Boot extends Phaser.Scene {
 
   preload() {
     this.load.on('progress', p => window.__splash?.progress(p));
-    this.load.image('arena', ART + 'arena.jpg');
+    this.load.image('arena', art('arena.jpg'));
     for (const def of Object.values(UNIT_ART)) {
       for (const key of def.textures) {
-        this.load.spritesheet(key, ART + key + '.png', { frameWidth: def.frameWidth, frameHeight: def.frameHeight });
+        this.load.spritesheet(key, art(key + '.png'), { frameWidth: def.frameWidth, frameHeight: def.frameHeight });
       }
     }
-    this.load.image('cardbar', ART + 'cardbar.webp');
-    this.load.spritesheet('cards', ART + 'cards.png', { frameWidth: CARD_ART.frameWidth, frameHeight: CARD_ART.frameHeight });
+    this.load.image('cardbar', art('cardbar.webp'));
+    this.load.spritesheet('cards', art('cards.png'), { frameWidth: CARD_ART.frameWidth, frameHeight: CARD_ART.frameHeight });
     for (const kind of ['tower', 'castle']) {
       for (const side of ['blue', 'red']) {
         const def = WORLD_ART[kind];
-        this.load.spritesheet(`${kind}-${side}`, ART + `${kind}-${side}.png`, { frameWidth: def.frameWidth, frameHeight: def.frameHeight });
+        this.load.spritesheet(`${kind}-${side}`, art(`${kind}-${side}.png`), { frameWidth: def.frameWidth, frameHeight: def.frameHeight });
       }
     }
-    this.load.spritesheet('fx-fire', ART + 'fx-fire.jpg', { frameWidth: FX_ART.fire.frameWidth, frameHeight: FX_ART.fire.frameHeight });
+    this.load.spritesheet('fx-fire', art('fx-fire.jpg'), { frameWidth: FX_ART.fire.frameWidth, frameHeight: FX_ART.fire.frameHeight });
     for (const side of ['blue', 'red']) {
-      this.load.spritesheet(`p51-${side}`, ART + `p51-${side}.png`, { frameWidth: FX_ART.p51.frameWidth, frameHeight: FX_ART.p51.frameHeight });
+      this.load.spritesheet(`p51-${side}`, art(`p51-${side}.png`), { frameWidth: FX_ART.p51.frameWidth, frameHeight: FX_ART.p51.frameHeight });
     }
-    this.load.image('menu-bg', ART + 'menu-bg.webp');
-    for (const key of Object.keys(SCREEN_ART)) this.load.image(key, ART + key + '.webp');
+    this.load.image('menu-bg', art('menu-bg.webp'));
+    for (const key of Object.keys(SCREEN_ART)) this.load.image(key, art(key + '.webp'));
   }
 
   create() {
@@ -101,6 +108,7 @@ class Boot extends Phaser.Scene {
     }
     this.anims.create({ key: 'fx-fire:burst', frames: this.anims.generateFrameNumbers('fx-fire'), frameRate: 14 });
     this.anims.create({ key: 'fx-fire:burn', frames: this.anims.generateFrameNumbers('fx-fire', { frames: [2, 3, 4, 3] }), frameRate: 10, repeat: -1 });
+    this.sound.mute = !soundOn();
     window.__splash?.done();
     this.scene.start(new URLSearchParams(location.search).has('play') ? 'battle' : 'menu');
   }
@@ -122,7 +130,7 @@ class Menu extends Phaser.Scene {
       const img = this.add.image(0, 0, key).setInteractive({ useHandCursor: true });
       img.on('pointerover', () => img.setTint(0xfff0c8));
       img.on('pointerout', () => img.clearTint());
-      img.on('pointerdown', () => this.press(img, i === 0 ? () => this.play() : null));
+      img.on('pointerdown', () => this.press(img, i === 0 ? () => this.play() : i === 3 ? () => this.toggleSound() : null));
       return img;
     });
     this.icons = ['menu-trophy', 'menu-gift', 'menu-bell'].map(key => {
@@ -149,6 +157,13 @@ class Menu extends Phaser.Scene {
     this.time.delayedCall(120, () => { img.pressed = false; img.setScale(img.baseScale); });
     if (action) { this.time.delayedCall(140, action); return; }
     this.toast.setText('Coming soon').setAlpha(1);
+    this.tweens.killTweensOf(this.toast);
+    this.tweens.add({ targets: this.toast, alpha: 0, delay: 1100, duration: 400 });
+  }
+
+  toggleSound() {
+    setSoundOn(this.game, !soundOn());
+    this.toast.setText(soundOn() ? 'Sound on' : 'Sound off').setAlpha(1);
     this.tweens.killTweensOf(this.toast);
     this.tweens.add({ targets: this.toast, alpha: 0, delay: 1100, duration: 400 });
   }
@@ -245,6 +260,7 @@ class Battle extends Phaser.Scene {
       .setDepth(2000).setVisible(DEBUG);
     this.createCards();
     this.createFullscreenButton();
+    this.createPauseMenu();
 
     this.input.on('pointerdown', (p, over) => {
       if (over.length || this.state.ended) return;   // tik op een kaart of knop
@@ -261,7 +277,8 @@ class Battle extends Phaser.Scene {
     this.countText = this.add.text(W / 2, FIELD_BOTTOM / 2 - 20, '', textStyle(64, '#ffe08a', { strokeThickness: 10 }))
       .setOrigin(0.5).setDepth(2500);
     this.texts.push(this.countText);
-    this.countSub = this.text(W / 2, FIELD_BOTTOM / 2 + 30, 'Battle starts in', 14, '#f5e6c4').setOrigin(0.5).setDepth(2500);
+    this.countSub = this.text(W / 2, FIELD_BOTTOM / 2 + 30, 'Battle starts in', 14, '#f5e6c4').setOrigin(0.5).setDepth(2500)
+      .setVisible(this.countdown > 0);
     ensureLatestBuild().then(status => {
       if (status === 'stale') this.message.setText('New version available — refresh the page');
     });
@@ -272,6 +289,7 @@ class Battle extends Phaser.Scene {
   }
 
   tryDeploy(x, y) {
+    if (this.paused) return;
     if (this.countdown > 0) { this.message.setText('Wait for the battle to start'); return; }
     if (y >= FIELD_BOTTOM || y < 40 || x < ZONE.min || x > ZONE.max) return;
     const lane = Math.abs(y - LANES[0]) <= Math.abs(y - LANES[1]) ? 0 : 1;
@@ -328,6 +346,50 @@ class Battle extends Phaser.Scene {
     view.image.setFrame(view.art.frame);
     view.cost.setText(String(card.cost));
     view.label.setText(CARD_LABEL[card.type] ?? card.name);
+  }
+
+  // Pauzeknop linksboven: hervatten, geluid, opnieuw beginnen, opgeven (Esc werkt ook).
+  createPauseMenu() {
+    this.paused = false;
+    this.pauseIcon = this.add.graphics().setDepth(1200);
+    this.pauseButton = this.add.zone(0, 0, 30, 30).setInteractive({ useHandCursor: true }).setDepth(1300);
+    this.pauseButton.on('pointerdown', () => this.setPaused(true));
+    this.input.keyboard?.on('keydown-ESC', () => this.setPaused(!this.paused));
+
+    const cx = W / 2, cy = FIELD_BOTTOM / 2;
+    const shade = this.add.rectangle(cx, cy, W * 6, 2000, 0x000000, 0.55).setInteractive();
+    const panel = this.add.graphics();
+    panel.fillStyle(0x1b130b, 0.96).fillRoundedRect(cx - 150, cy - 128, 300, 256, 14);
+    panel.lineStyle(3, 0xd9b26a).strokeRoundedRect(cx - 150, cy - 128, 300, 256, 14);
+    const title = this.text(cx, cy - 102, 'PAUSED', 24, '#ffd978').setOrigin(0.5);
+    const button = (y, label, action, color = '#fff4d6') => {
+      const t = this.text(cx, y, label, 16, color, { backgroundColor: '#3b2a18', padding: { x: 16, y: 7 }, fixedWidth: 220, align: 'center' })
+        .setOrigin(0.5).setInteractive({ useHandCursor: true });
+      t.on('pointerover', () => t.setBackgroundColor('#5a4128'));
+      t.on('pointerout', () => t.setBackgroundColor('#3b2a18'));
+      t.on('pointerdown', action);
+      return t;
+    };
+    const resume = button(cy - 58, 'RESUME', () => this.setPaused(false));
+    this.soundButton = button(cy - 14, '', () => { setSoundOn(this.game, !soundOn()); this.refreshSoundLabel(); });
+    const restart = button(cy + 30, 'RESTART', () => { this.setPaused(false); this.scene.restart(); });
+    const surrender = button(cy + 74, 'SURRENDER', () => {
+      this.setPaused(false);
+      if (!this.state.ended) { this.state.ended = true; this.state.winner = 'red'; this.showResult('red'); }
+    }, '#ffc0b5');
+    this.pauseLayer = this.add.container(0, 0, [shade, panel, title, resume, this.soundButton, restart, surrender])
+      .setDepth(4000).setVisible(false);
+    this.refreshSoundLabel();
+  }
+
+  refreshSoundLabel() { this.soundButton.setText(soundOn() ? 'SOUND: ON' : 'SOUND: OFF'); }
+
+  setPaused(on) {
+    if (this.state.ended && on) return;
+    this.paused = on;
+    this.pauseLayer.setVisible(on);
+    if (on) { this.anims.pauseAll(); this.tweens.pauseAll(); this.selected = null; }
+    else { this.anims.resumeAll(); this.tweens.resumeAll(); }
   }
 
   createFullscreenButton() {
@@ -391,6 +453,10 @@ class Battle extends Phaser.Scene {
     const fx = W - 16, fy = portrait ? -100 : 14;
     this.fsButton.setPosition(fx, fy);
     this.fsIcon.setPosition(fx, fy);
+    this.pauseButton.setPosition(18, fy + 2);
+    this.pauseIcon.clear().fillStyle(0x1b130b, 0.75).fillRoundedRect(4, fy - 12, 28, 28, 6)
+      .lineStyle(2, 0xd9b26a).strokeRoundedRect(4, fy - 12, 28, 28, 6)
+      .fillStyle(0xf1dcae).fillRect(12, fy - 5, 4, 14).fillRect(20, fy - 5, 4, 14);
     this.drawBackdrop();
   }
 
@@ -419,6 +485,14 @@ class Battle extends Phaser.Scene {
         }
         const ally = this.state.units.find(u => u.id === e.targetId);
         this.sparks.push({ x: e.to.x, y: (ally ? footY(ally) : e.to.y) - 30, t: 0, dur: 0.55, color: 0xffe27a, heal: true });
+      } else if (e.type === 'cloak') {
+        const v = this.views.get(e.id);
+        if (v) {
+          v.revealed = false;                       // volgende klap = reveal strike
+          v.sprite.setAlpha(1).anims.play(`${v.sprite.texture.key}:cloak`);
+          v.lockUntil = now + v.sprite.anims.currentAnim.duration;
+          v.cloaking = v.lockUntil;
+        }
       } else if (e.type === 'possess') {
         const target = this.state.units.find(u => u.id === e.targetId);
         this.sparks.push({ x: e.x, y: (target ? footY(target) : e.y) - 30, t: 0, dur: 0.7, color: 0xff7ad9, heal: true });
@@ -517,6 +591,7 @@ class Battle extends Phaser.Scene {
 
   update(_time, delta) {
     const dt = Math.min(delta / 1000, 0.1);
+    if (this.paused) return;
     if (this.countdown > 0) {
       const before = Math.ceil(this.countdown);
       this.countdown = Math.max(0, this.countdown - dt);
@@ -571,8 +646,13 @@ class Battle extends Phaser.Scene {
         v.charmUntil = now + 700;
       }
       // Schaduwsamoerai: eigen speler ziet een schim, de tegenstander niets.
-      const alpha = u.hidden ? (u.side === 'blue' ? 0.35 : 0) : 1;
-      v.sprite.setPosition(u.x, fy).setFlipX(u.facing < 0).setDepth(fy).setAlpha(alpha);
+      // tijdens de cloak-animatie nog zichtbaar, daarna schim (eigen) of onzichtbaar (vijand)
+      const alpha = u.hidden && now >= (v.cloaking ?? 0) ? (u.side === 'blue' ? 0.35 : 0) : 1;
+      // Gespiegeld (naar links) moet ook het ankerpunt (de voeten) mee spiegelen,
+      // anders staat een brede sprite naast zijn eigen schaduw en levensbalk.
+      const ud = UNIT_ART[u.card.type], flip = u.facing < 0;
+      v.sprite.setPosition(u.x, fy).setFlipX(flip).setOrigin(flip ? 1 - ud.originX : ud.originX, ud.originY)
+        .setDepth(fy).setAlpha(alpha);
       if (now >= v.lockUntil) {
         const anim = u.state === 'move' ? 'walk' : u.card.type === 'spy' && u.channelTargetId ? 'charm' : 'idle';
         v.sprite.anims.play(`${v.sprite.texture.key}:${anim}`, true);
