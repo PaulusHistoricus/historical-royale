@@ -163,13 +163,21 @@ export function objectiveFor(state, unit) {
     ?? null;
 }
 
-/** Na het slopen van de vijandelijke toren vechten beide banen samen bij het kasteel. */
-function hasBrokenThrough(state, unit) {
-  return !laneTower(state, other(unit.side), unit.lane);
-}
 
+/**
+ * Eenheden uit verschillende banen vechten alleen samen in een kasteelgebied: beide staan
+ * voorbij de torenlijn van dezelfde kant, en die kant heeft in (minstens) één van de twee
+ * banen haar toren verloren. Op het middenveld blijven de banen altijd gescheiden
+ * (ook voor de Priestess en de vlammenkegel).
+ */
+function behindTowers(unit, side) {
+  const towerX = STRUCTURE_POSITIONS[side].towerX;
+  return side === 'blue' ? unit.x <= towerX : unit.x >= towerX;
+}
 function canFight(state, a, b) {
-  return a.lane === b.lane || (hasBrokenThrough(state, a) && hasBrokenThrough(state, b));
+  if (a.lane === b.lane) return true;
+  return ['blue', 'red'].some(side => behindTowers(a, side) && behindTowers(b, side) &&
+    (!laneTower(state, side, a.lane) || !laneTower(state, side, b.lane)));
 }
 
 /**
