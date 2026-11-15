@@ -48,6 +48,8 @@ Zo werkt de weergave nu:
 - Kaartkeuze: `this.selected` is een vak (0–3) of `null`. Na een geslaagde inzet wordt het `null` en schuift de nieuwe kaart het vak in. Toetsen 1–4 kiezen ook een kaart.
 - De advertentie staat in `index.html` **onder** het spel, nooit eroverheen (AdSense-regels: geen advertenties waar per ongeluk op getikt wordt tijdens spelen).
 
+Geluid (v0.15): bronnen in `audio/source/`, bewerkt met `tools/audio/build.sh` (ffmpeg) naar `public/assets/audio/`. In `src/main.js` staan de groepen in `SFX` (bestanden, volume, minimale tussentijd zodat 10 zwaarden tegelijk geen lawaai worden) en `sfx(scene, groep)`; muziek via `playMusic()`. Geluid aan/uit = `game.sound.mute`. Nieuw geluid: bestand in `audio/source/`, regel in `build.sh`, groep in `SFX`.
+
 Nieuwe art toevoegen: zie `art/README.md`. Kort: zet het bronbestand in `art/source/`, voeg de uitsnede toe in `tools/art/units.py` of `world.py`, draai `python3 tools/art/build.py`, en controleer in de browser.
 
 De arena-art bepaalt de plek van banen, torens en kastelen (`LANES` en `STRUCTURE_POSITIONS` in `src/sim/config.js`). Houd het veld **spiegelsymmetrisch** (rood = 960 − blauw); een asymmetrie van 11 px gaf rood al 82 % winkans.
