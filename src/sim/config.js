@@ -30,14 +30,26 @@ export const ENERGY_SECONDS_OVERTIME = 0.8;
 export const DETECTION_RANGE = 205;      // hoe ver een eenheid vijanden vóór zich opmerkt
 
 export const CARDS = [
-  { name: 'Legionair',    type: 'melee',  cost: 3, hp: 240, damage: 36, range: 12,  speed: 56, rate: 0.9, radius: 13 },
-  { name: 'Boogschutter', type: 'archer', cost: 4, hp: 130, damage: 29, range: 120, speed: 46, rate: 1.2, radius: 13 },
-  { name: 'Kanon',        type: 'cannon', cost: 6, hp: 300, damage: 48, range: 106, speed: 22, rate: 3.2, radius: 22 },
+  { name: 'Legionair',    type: 'melee',  role: 'melee', material: 'bio', cost: 3, hp: 240, damage: 36, range: 12,  speed: 56, rate: 0.9, radius: 13 },
+  { name: 'Boogschutter', type: 'archer', role: 'ranged', material: 'bio', cost: 4, hp: 130, damage: 29, range: 120, speed: 46, rate: 1.2, radius: 13 },
+  { name: 'Kanon',        type: 'cannon', role: 'siege', material: 'mechanical', cost: 6, hp: 300, damage: 48, range: 106, speed: 22, rate: 3.2, radius: 22 },
   // Tijdperken zijn vrij te combineren: geen beschavingsgebonden legers of bonussen.
-  { name: 'Romeinse ruiter', type: 'cavalry', cost: 4, hp: 215, damage: 37, range: 15, speed: 110, rate: 1.0, radius: 18, chargeBonus: 39, chargeDistance: 65 },
-  { name: 'Viking berserker', type: 'berserker', cost: 4, hp: 190, damage: 49, range: 14, speed: 66, rate: 0.85, radius: 14, rageMultiplier: 1.6 },
-  { name: 'Mongoolse ruiterboogschutter', type: 'horse_archer', cost: 5, hp: 155, damage: 24, range: 125, speed: 88, rate: 0.9, radius: 17 },
-  { name: 'Musketier', type: 'musket', cost: 4, hp: 140, damage: 90, range: 124, speed: 39, rate: 2.8, radius: 13 },
+  { name: 'Romeinse ruiter', type: 'cavalry', role: 'melee', material: 'bio', cost: 4, hp: 215, damage: 37, range: 15, speed: 110, rate: 1.0, radius: 18, chargeBonus: 39, chargeDistance: 65 },
+  { name: 'Viking berserker', type: 'berserker', role: 'melee', material: 'bio', cost: 4, hp: 190, damage: 49, range: 14, speed: 66, rate: 0.85, radius: 14, rageMultiplier: 1.6 },
+  { name: 'Mongoolse ruiterboogschutter', type: 'horse_archer', role: 'ranged', material: 'bio', cost: 5, hp: 155, damage: 24, range: 125, speed: 88, rate: 0.9, radius: 17 },
+  { name: 'Musketier', type: 'musket', role: 'ranged', material: 'bio', cost: 4, hp: 140, damage: 90, range: 124, speed: 39, rate: 2.8, radius: 13 },
+  // Vijf nieuwe kaarten. Speciale P-51 is een eenmalige baan-aanval, geen permanente eenheid.
+  { name: 'Egyptische genezeres', type: 'healer', role: 'special', material: 'bio', cost: 2,
+    hp: 95, damage: 9, range: 105, speed: 43, rate: 2.0, radius: 12, healPct: 0.03, healRange: 115 },
+  { name: 'Schaduwsamoerai', type: 'samurai', role: 'melee', material: 'bio', cost: 4,
+    hp: 170, damage: 54, range: 14, speed: 75, rate: 1.0, radius: 13, stealthBonus: 1.5 },
+  { name: 'Spionne', type: 'spy', role: 'special', material: 'bio', cost: 5,
+    hp: 100, damage: 0, range: 24, speed: 59, rate: 2.0, radius: 12, channelTime: 2.0, maxStealCost: 5 },
+  { name: 'Vuurgooier', type: 'firethrower', role: 'ranged', material: 'bio', cost: 4,
+    hp: 115, damage: 18, range: 94, speed: 40, rate: 2.4, radius: 13, splashRadius: 42, burnDps: 12, burnSeconds: 3 },
+  { name: 'P-51 Mustang', type: 'p51', role: 'special', material: 'mechanical', cost: 6,
+    damage: 65, structureDamage: 28, duration: 1.7 },
+
 ];
 
 export const STRUCTURES = {
