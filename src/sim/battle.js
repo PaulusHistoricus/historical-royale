@@ -235,8 +235,11 @@ export function step(state, dt) {
       ...state.structures.filter(t => t.hp > 0 && t.side !== strike.side && t.kind === 'tower' && t.lane === strike.lane),
     ];
     for (const target of candidates) {
-      if (strike.hitIds.includes(target.id) || target.x < Math.min(x0, x1) ||
-          target.x > Math.max(x0, x1)) continue;
+      // Marge: eenheden lopen het vliegtuig tegemoet en zouden anders tussen
+      // twee ticks door het strookje kunnen glippen.
+      const margin = target.radius + 8;
+      if (strike.hitIds.includes(target.id) || target.x < Math.min(x0, x1) - margin ||
+          target.x > Math.max(x0, x1) + margin) continue;
       const aircraft = CARDS.find(c => c.type === 'p51');
       const pct = target.kind ? 0 : aircraft.minUnitDamagePct +
         state.rng() * (aircraft.maxUnitDamagePct - aircraft.minUnitDamagePct);
@@ -259,6 +262,12 @@ export function step(state, dt) {
   // 1. BESLISSEN
   for (const u of state.units) {
     if (u.hp <= 0) continue;
+    // Betoverd door een spion: bevroren tot de overname, of tot de spion gedood is (gered).
+    if (u.charmedBy) {
+      const spy = state.units.find(x => x.id === u.charmedBy && x.hp > 0 && x.channelTargetId === u.id);
+      if (spy) { u.state = 'charmed'; u.targetId = null; continue; }
+      u.charmedBy = null;
+    }
     u.cd = Math.max(0, u.cd - dt);
     // Schaduwsamoerai: na recloakTime zonder aanval weer onzichtbaar, met nieuwe hinderlaagbonus.
     if (u.card.type === 'samurai' && !u.hidden) {
@@ -279,6 +288,7 @@ export function step(state, dt) {
         const ally = allies[0];
         const amount = Math.min(ally.max - ally.hp, ally.max * u.card.healPct);
         ally.hp += amount;
+        if (ally.x !== u.x) u.facing = ally.x > u.x ? 1 : -1;
         u.cd = u.card.rate;
         u.state = 'attack';
         u.targetId = ally.id;
@@ -296,6 +306,7 @@ export function step(state, dt) {
       if (u.card.type === 'spy') {
         u.state = 'attack';
         if (u.channelTargetId !== target.id) { u.channelTargetId = target.id; u.channelProgress = 0; }
+        target.charmedBy = u.id;
         u.channelProgress += dt;
         if (u.channelProgress >= u.card.channelTime) {
           const formerSide = target.side;
@@ -304,6 +315,7 @@ export function step(state, dt) {
           target.targetId = null;
           target.channelTargetId = null;
           target.channelProgress = 0;
+          target.charmedBy = null;
           u.hp = 0;
           state.events.push({ type: 'possess', spyId: u.id, targetId: target.id,
             fromSide: formerSide, toSide: u.side, x: target.x, y: target.y });

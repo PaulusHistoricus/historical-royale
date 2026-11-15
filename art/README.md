@@ -50,7 +50,7 @@ Een nieuwe kaart: voeg hem toe aan `kaarten.png` (zelfde stijl, juweel linksbove
 
 `vuurwerper-bord.png`, `samoerai-bord.png`, `spion-bord.png` en `genezeres-bord.png` zijn borden op een donkere
 achtergrond. `boards.py` vindt per paneel de frames en haalt het figuur los met **rembg** (`pip install "rembg[cpu]"`,
-model u2net); vuur, magie en gloed worden er met een zwart-sleutel bij gehouden. Paneelcoördinaten staan in `units.py`.
+model u2net). Dat masker wordt daarna strak gemaakt (`clean_alpha`): figuur volledig dekkend, schaduwwaas, grondschaduw en paneelranden weg. Vuur, magie en gloed worden er met een zwart-sleutel bij gehouden. **Tip:** lever nieuwe borden bij voorkeur op een witte of groene achtergrond; zwarte kleding op een zwart bord (zoals de spion) is nooit perfect los te knippen. Paneelcoördinaten staan in `units.py`.
 Het vuur van de vuurpot (`fx-fire.jpg`) en de P-51 (`p51.png`) staan in `effects.py`; menu en logo in `screens.py`.
 
 ## Referentiebladen

@@ -44,7 +44,7 @@ export const CARDS = [
   { name: 'Shadow Samurai', type: 'samurai', role: 'melee', material: 'bio', cost: 4,
     hp: 170, damage: 54, range: 14, speed: 75, rate: 1.0, radius: 13, stealthBonus: 1.5, recloakTime: 2.5 },
   { name: 'Spy', type: 'spy', role: 'special', material: 'bio', cost: 5,
-    hp: 100, damage: 0, range: 24, speed: 59, rate: 2.0, radius: 12, channelTime: 2.0, maxStealCost: 5 },
+    hp: 100, damage: 0, range: 24, speed: 59, rate: 2.0, radius: 12, channelTime: 3.0, maxStealCost: 5 },
   { name: 'Fire Thrower', type: 'firethrower', role: 'ranged', material: 'bio', cost: 4,
     hp: 115, damage: 18, range: 94, speed: 40, rate: 2.4, radius: 13, splashRadius: 42, burnDps: 12, burnSeconds: 3 },
   { name: 'P-51 Mustang', type: 'p51', role: 'special', material: 'mechanical', cost: 6,

@@ -323,10 +323,10 @@
   ]
  },
  "firethrower": {
-  "frameWidth": 186,
-  "frameHeight": 117,
-  "originX": 0.5269,
-  "originY": 0.9829,
+  "frameWidth": 167,
+  "frameHeight": 115,
+  "originX": 0.5569,
+  "originY": 0.9826,
   "anims": {
    "idle": [
     0,
@@ -369,10 +369,10 @@
   ]
  },
  "samurai": {
-  "frameWidth": 204,
-  "frameHeight": 117,
-  "originX": 0.4216,
-  "originY": 0.9829,
+  "frameWidth": 202,
+  "frameHeight": 118,
+  "originX": 0.4109,
+  "originY": 0.9831,
   "anims": {
    "idle": [
     0,
@@ -430,10 +430,10 @@
   ]
  },
  "spy": {
-  "frameWidth": 178,
-  "frameHeight": 117,
-  "originX": 0.5225,
-  "originY": 0.9829,
+  "frameWidth": 195,
+  "frameHeight": 127,
+  "originX": 0.5179,
+  "originY": 0.9843,
   "anims": {
    "idle": [
     0,
@@ -486,10 +486,10 @@
   ]
  },
  "healer": {
-  "frameWidth": 218,
-  "frameHeight": 124,
-  "originX": 0.289,
-  "originY": 0.9839,
+  "frameWidth": 231,
+  "frameHeight": 132,
+  "originX": 0.2987,
+  "originY": 0.9848,
   "anims": {
    "idle": [
     0,

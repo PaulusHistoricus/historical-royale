@@ -49,6 +49,9 @@ export function run(state, seconds, onTick) {
         const waited = (sinceHit.get(u.id) ?? 0) + TICK;
         sinceHit.set(u.id, waited);
         assert.ok(u.card.type === 'spy' || waited <= u.card.rate + 2 * TICK, `eenheid ${u.id} (${u.card.name}) staat ${waited.toFixed(2)}s in 'attack' zonder te slaan`);
+      } else if (u.state === 'charmed') {
+        assert.equal(u.x, before.get(u.id), `betoverde eenheid ${u.id} hoort stil te staan`);
+        sinceHit.delete(u.id);
       } else if (u.state === 'idle' && u.card.type === 'spy') {
         // Spy awaits an eligible biological target.
       } else {

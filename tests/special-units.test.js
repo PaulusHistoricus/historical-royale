@@ -50,12 +50,12 @@ test('Healer heals biological allies but not mechanical units', () => {
   assert.equal(cannon.hp, 100);
 });
 
-test('Spy converts an eligible biological unit after 2 seconds and disappears', () => {
+test('Spy converts an eligible biological unit after the channel time and disappears', () => {
   const s = createBattle({ ai: false });
   const spy = addUnit(s, 'blue', 0, idx('spy'), 490);
   const foe = addUnit(s, 'red', 0, idx('melee'), 507);
   spy.hp = 500; spy.max = 500;
-  const events = run(s, 2.15);
+  const events = run(s, spy.card.channelTime + 0.15);
   assert.equal(foe.side, 'blue');
   assert.ok(events.some(e => e.type === 'possess' && e.targetId === foe.id));
   assert.ok(!s.units.includes(spy));
@@ -110,4 +110,57 @@ test('Samurai stays visible while it keeps fighting', () => {
   foe.hp = foe.max = 5000;
   run(s, 0.5);
   for (let i = 0; i < 6 * 60; i++) { step(s, 1 / 60); assert.equal(samurai.hidden, false); }
+});
+
+test('P-51 hits every enemy unit in its lane, also units walking towards it', () => {
+  let missed = 0;
+  for (let k = 0; k < 40; k++) {
+    const s = createBattle({ ai: false, seed: k });
+    const units = [];
+    for (let i = 0; i < 5; i++) {
+      const u = addUnit(s, 'red', 0, idx(i % 2 ? 'cavalry' : 'melee'), 330 + i * 80 + k * 1.3);
+      u.hp = u.max = 99999; units.push(u);
+    }
+    s.energy.blue = 10; deploy(s, 'blue', 0, idx('p51'), 400);
+    const hit = new Set(run(s, 2.5).filter(e => e.kind === 'p51').map(e => e.targetId));
+    missed += units.filter(u => !hit.has(u.id)).length;
+  }
+  assert.equal(missed, 0);
+});
+
+test('Charmed unit is frozen while the spy channels', () => {
+  const s = createBattle({ ai: false });
+  const spy = addUnit(s, 'blue', 0, idx('spy'), 470);
+  const foe = addUnit(s, 'red', 0, idx('melee'), 500);
+  spy.hp = spy.max = 5000;
+  run(s, 0.3);
+  assert.equal(foe.charmedBy, spy.id);
+  const x = foe.x;
+  const events = run(s, spy.card.channelTime - 0.6);
+  assert.equal(foe.state, 'charmed');
+  assert.equal(foe.x, x, 'staat stil');
+  assert.ok(!events.some(e => e.type === 'hit' && e.attackerId === foe.id), 'valt niet aan');
+});
+
+test('Killing the spy in time rescues the charmed unit', () => {
+  const s = createBattle({ ai: false });
+  const spy = addUnit(s, 'blue', 0, idx('spy'), 470);
+  const foe = addUnit(s, 'red', 0, idx('melee'), 500);
+  run(s, 0.5);
+  assert.equal(foe.state, 'charmed');
+  spy.hp = 0;                                   // gered: een bondgenoot doodt de spion
+  run(s, 0.5);
+  assert.equal(foe.side, 'red');
+  assert.equal(foe.charmedBy ?? null, null);
+  assert.notEqual(foe.state, 'charmed');
+});
+
+test('Healer only heals own units and turns towards the ally she heals', () => {
+  const s = createBattle({ ai: false });
+  const healer = addUnit(s, 'red', 0, idx('healer'), 600);
+  const enemy = addUnit(s, 'blue', 0, idx('melee'), 560); enemy.hp = enemy.max = 99999; enemy.hp = 5000;
+  const ally = addUnit(s, 'red', 0, idx('melee'), 660); ally.hp = 100;
+  const heals = run(s, 3).filter(e => e.type === 'heal');
+  assert.ok(heals.length >= 1);
+  assert.ok(heals.every(e => e.targetId === ally.id));
 });
