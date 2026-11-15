@@ -56,6 +56,16 @@ def build_screens(SRC, OUT, MANIFEST):
     bg.resize((1920, round(bg.height * 1920 / bg.width)), Image.LANCZOS).save(f'{OUT}/menu-bg.webp', quality=86, method=6)
     logo = Image.open(SRC + 'logo.png').convert('RGB')
     logo.resize((1200, round(logo.height * 1200 / logo.width)), Image.LANCZOS).save(f'{OUT}/logo.webp', quality=88, method=6)
+    # App-iconen (installeren): vierkante uitsnede van het logo, ronde hoeken doet het toestel zelf.
+    icon = logo_full = Image.open(SRC + 'logo.png').convert('RGB').crop((366, 0, 1307, 941))
+    import os
+    pub = os.path.dirname(OUT.rstrip('/'))       # public/assets
+    for size in (192, 512):
+        icon.resize((size, size), Image.LANCZOS).save(f'{pub}/icon-{size}.png', optimize=True)
+    icon.resize((180, 180), Image.LANCZOS).save(f'{pub}/apple-touch-icon.png', optimize=True)
+    # maskable: veilige zone (80%) met de rand opgevuld
+    m = Image.new('RGB', (512, 512), (40, 24, 12)); m.paste(icon.resize((420, 420), Image.LANCZOS), (46, 46))
+    m.save(f'{pub}/icon-maskable-512.png', optimize=True)
     info = {}
     for src, (name, width) in ELEMENTS.items():
         im = _cutout(SRC + src, width)
