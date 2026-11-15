@@ -1,3 +1,4 @@
+import { CARDS as CARDS_ } from '../src/sim/config.js';
 // Doelwitselectie.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -108,4 +109,21 @@ test('torens schieten op de dichtstbijzijnde vijand in hun eigen baan; het kaste
   log = run(t, 3);
   assert.ok(log.hits.some(h => h.attackerId === 'castle-blue' && h.targetId === siege.id));
   assert.ok(log.hits.some(h => h.attackerId === siege.id && h.targetId === 'castle-blue'));
+});
+
+const HEALER = () => CARDS_.findIndex(c => c.type === 'healer');
+test('banen blijven gescheiden op het middenveld, ook als er torens gevallen zijn (alleen bij het kasteel samen)', () => {
+  // Situatie uit het spel: rood heeft beide torens verloren, blauw één.
+  const s = arena();
+  for (const id of ['tower-red-0', 'tower-red-1', 'tower-blue-0']) s.structures.find(x => x.id === id).hp = 0;
+  const blueMid = place(s, 'blue', 1, LEGIONAIR, 480);
+  const redMid = place(s, 'red', 0, LEGIONAIR, 500);
+  assert.notEqual(chooseTarget(s, blueMid), redMid, 'blauw in baan 1 valt rood in baan 0 niet aan');
+  assert.notEqual(chooseTarget(s, redMid), blueMid);
+  // Priestess geneest ook dan alleen haar eigen baan
+  const healer = place(s, 'blue', 0, HEALER(), 400);
+  const other = place(s, 'blue', 1, LEGIONAIR, 410); other.hp = 50;
+  run(s, 2);
+  assert.ok(other.hp <= 50);
+  void healer;
 });
