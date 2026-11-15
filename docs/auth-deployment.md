@@ -1,7 +1,7 @@
-# Legion Royale: Cloud86 Google login and MariaDB setup
+# Legion Royale: Google + email login and MariaDB deployment
 
 > Status: Code implemented, **NOT LIVE** until credentials, schema and deployment are configured.
-> This creates real Google-linked accounts and stores profiles. It does **not** create a multiplayer server.
+> This creates Google-linked and email/password accounts in the SAME players table. It does **not** create a multiplayer server.
 
 ## Requirements
 
@@ -16,10 +16,10 @@ Plesk: Database name `LegionRoyale` (your actual Plesk name may be prefixed), re
 `legionroyale.paulushistoricus.nl`; create only one dedicated user (`legionroyale_app`) with
 **local connections only** and access only to the game database.
 
-Open the new database in phpMyAdmin; import `database/schema.sql` once. The schema provides
+For a new database, import `database/schema.sql` once. If `schema.sql` was already imported, run **only** `database/migrations/001_email_auth.sql` in phpMyAdmin; do not re-import the full schema. The schema provides
 players, linked Google identities, progression, wallets, audit ledger, inventory, decks,
 achievements, and match history. Gameplay, shop, achievements and matchmaking are **not
-yet wired to these tables**. Only the new-account/profile creation is live after configuration.
+yet wired to these tables**. New-account/profile creation works after configuration. Email login also requires working Cloud86 SMTP.
 
 ## 2. Google OAuth application
 
@@ -58,7 +58,7 @@ Directory layout, when uploading **contents of** package `public/` into `httpdoc
 
 Copy `private/legionroyale.example.php` to a new, separate
 `<subdomain home>/private/legionroyale.php`. Fill `db_name` (exact Plesk database name),
-`db_user`, `db_password`, `google_client_id`, and `google_client_secret`.
+`db_user`, `db_password`, `google_client_id`, and `google_client_secret`. Add the SMTP + rate-limit keys described below.
 Leave `site_origin` exactly as `https://legionroyale.paulushistoricus.nl`.
 Never publish this real config; set strict file permissions if Plesk offers them.
 
@@ -96,3 +96,79 @@ provide a long-running multiplayer process. Confirm hosting capabilities first.
 
 Account deletion cascades application rows but does not automatically remove hosting backups.
 Define a backup retention policy and privacy notice before a public launch.
+
+## 6. Email/password login (no player table duplication)
+
+The game now offers **Continue with email** alongside Google and guest play:
+
+1. An unknown or existing email is entered. The browser sends a same-origin CSRF-protected POST
+   to `/api/email-request-link.php`. The response is always generic; no account enumeration.
+2. The Cloud86 SMTP account sends a **one-time link**, valid for 15 minutes.
+   The random 256-bit token is stored only as `SHA-256(token)` in `email_login_tokens`.
+   The link uses a URL **fragment** (`/#email_token=...`), so the secret is not sent in HTTP
+   requests or web server logs. JavaScript removes the fragment from history immediately.
+3. The player enters a new password **twice**, can reveal each field using the eye button,
+   and submits the token plus the two fields to `/api/email-set-password.php`.
+   Server validates matching values, 12–72 UTF-8 **bytes**, hashes via `password_hash`,
+   consumes all outstanding reset links for that email, and signs the player in.
+4. Subsequent visits use `/api/email-login.php` with email and password.
+   **Forgot password?** sends another identical 15-minute link.
+
+### Same account for Google and email
+
+`email_identities` has a unique, verified email and a FK to `players.id`.
+A Google sign-in with a Google-verified email looks up that email identity and
+links the Google subject to its `player_id` instead of creating a second player.
+A link clicked for an earlier Google-only user likewise attaches an email credential
+to that same player. Consequently, XP, coins, decks and achievements belong to ONE player.
+
+Existing Google users are supported: the callback migrates their verified Google
+email to `email_identities` on next sign-in; password reset also checks the older
+`google_identities` rows. **Apply the SQL migration before deploying PHP.**
+
+### Cloud86 SMTP config
+
+Only store these secrets in **`private/legionroyale.php`** alongside the existing config
+values; do not commit them. Add the following entries to the returned PHP array:
+
+```php
+'smtp_host' => 'YOUR_CLOUD86_SMTP_HOST',
+'smtp_port' => 587,
+'smtp_username' => 'YOUR_SMTP_MAILBOX_LOGIN',
+'smtp_password' => 'YOUR_SMTP_MAILBOX_PASSWORD',
+'smtp_from_email' => 'YOUR_VERIFIED_SENDER_ADDRESS',
+'rate_limit_secret' => 'REPLACE_WITH_AT_LEAST_32_RANDOM_CHARACTERS',
+```
+
+The configured mailbox must exist and permit authenticated **STARTTLS on TCP/587**.
+Use the SMTP hostname listed by Cloud86/Plesk, not an assumed value. The FROM address
+must be allowed by that SMTP account. No PHP `mail()` fallback is used.
+
+Generate the rate-limit secret securely and keep it unchanged across deployments.
+Requests are limited by both IP and email without storing those in plain text
+in the `auth_rate_limits` table. Rate limits are server-side and persistent.
+
+### Post-deployment checks
+
+- Confirm `GET /api/me.php` returns JSON and a usable anonymous CSRF token.
+- Request a link for a fresh email; verify the generic confirmation text and delivered mail.
+- Use the link to set a password; check that mismatch shows an error and two eye toggles work.
+- Try the used link again; it must fail. Try a link after 15 minutes; it must fail.
+- Log out, log back in by email/password, and verify the same player ID and wallet.
+- Test *Forgot password?* and verify the previous password stops working.
+- Test Google linking using the **same Google-verified address** and ensure no duplicate
+  players are created. Test the reverse order (Google first, password second).
+- Verify throttling (3 email link requests/15 min/email; 12/15 min/IP;
+  8 password attempts/15 min/email; 35/15 min/IP).
+- Check Cloud86 PHP logs for SMTP/TLS errors, but do not log tokens or secrets.
+- Clean up expired tokens and old rate-limit rows periodically (DB maintenance).
+
+### Compatibility / frontend styling ownership
+
+This change only touches `src/auth.js`, `public/api/`, `database/` and `docs/`.
+Existing IDs `auth-ui`, `lr-auth-dialog`, `lr-auth-google`, `lr-auth-guest`,
+`lr-auth-error`, `lr-profile` etc. are unchanged. The new forms use
+`lr-email-*` IDs. Claude can add CSS selectors in `src/auth.css` independently.
+
+The CI workflow already runs PHP lint (`find public/api private ... php -l`);
+run `npm test` and `npm run build` as well.

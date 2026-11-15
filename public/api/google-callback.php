@@ -30,7 +30,9 @@ try {
     if (!in_array($claims['email_verified'] ?? false, [true, 'true', '1', 1], true)) back('email_unverified');
 
     $sub = $claims['sub'];
-    $email = filter_var($claims['email'] ?? '', FILTER_VALIDATE_EMAIL) ?: null;
+    $emailValue = filter_var($claims['email'] ?? '', FILTER_VALIDATE_EMAIL);
+    if (!is_string($emailValue) || strlen($emailValue) > 254) back('invalid_identity');
+    $email = strtolower($emailValue);
     $name = trim((string)($claims['name'] ?? 'Player'));
     $name = function_exists('mb_substr') ? mb_substr($name !== '' ? $name : 'Player', 0, 40) : substr($name !== '' ? $name : 'Player', 0, 40);
     $avatar = (string)($claims['picture'] ?? '');
@@ -42,20 +44,42 @@ try {
         $q->execute([$sub]);
         $playerId = $q->fetchColumn();
         if ($playerId === false) {
-            $publicId = sprintf('%s-%s-%s-%s-%s', bin2hex(random_bytes(4)), bin2hex(random_bytes(2)),
-                '4' . substr(bin2hex(random_bytes(2)), 1), '8' . substr(bin2hex(random_bytes(2)), 1),
-                bin2hex(random_bytes(6)));
-            $q = $pdo->prepare('INSERT INTO players(public_id, display_name, avatar_url, last_login_at) VALUES (?, ?, ?, NOW())');
-            $q->execute([$publicId, $name, $avatar]);
-            $playerId = (int)$pdo->lastInsertId();
+            // Link only a Google-verified email to an existing email/password account.
+            $q = $pdo->prepare('SELECT player_id FROM email_identities WHERE email=? FOR UPDATE');
+            $q->execute([$email]);
+            $linkedId = $q->fetchColumn();
+            if ($linkedId === false) {
+                $publicId = sprintf('%s-%s-%s-%s-%s', bin2hex(random_bytes(4)), bin2hex(random_bytes(2)),
+                    '4' . substr(bin2hex(random_bytes(2)), 1), '8' . substr(bin2hex(random_bytes(2)), 1),
+                    bin2hex(random_bytes(6)));
+                $q = $pdo->prepare('INSERT INTO players(public_id, display_name, avatar_url, last_login_at) VALUES (?, ?, ?, UTC_TIMESTAMP())');
+                $q->execute([$publicId, $name, $avatar]);
+                $playerId = (int)$pdo->lastInsertId();
+                $pdo->prepare('INSERT INTO player_progress(player_id) VALUES (?)')->execute([$playerId]);
+                $pdo->prepare('INSERT INTO wallets(player_id) VALUES (?)')->execute([$playerId]);
+                $pdo->prepare('INSERT INTO email_identities(player_id,email,password_hash,email_verified_at) VALUES(?,?,NULL,UTC_TIMESTAMP())')
+                    ->execute([$playerId,$email]);
+            } else {
+                $playerId = (int)$linkedId;
+            }
             $q = $pdo->prepare('INSERT INTO google_identities(google_sub, player_id, email) VALUES(?, ?, ?)');
             $q->execute([$sub, $playerId, $email]);
-            $pdo->prepare('INSERT INTO player_progress(player_id) VALUES (?)')->execute([$playerId]);
-            $pdo->prepare('INSERT INTO wallets(player_id) VALUES (?)')->execute([$playerId]);
         } else {
             $playerId = (int)$playerId;
-            $pdo->prepare('UPDATE players SET last_login_at=NOW() WHERE id=?')->execute([$playerId]);
+            $pdo->prepare('UPDATE players SET last_login_at=UTC_TIMESTAMP() WHERE id=?')->execute([$playerId]);
             $pdo->prepare('UPDATE google_identities SET email=? WHERE google_sub=?')->execute([$email, $sub]);
+            $q = $pdo->prepare('SELECT email FROM email_identities WHERE player_id=? FOR UPDATE');
+            $q->execute([$playerId]);
+            $previousEmail = $q->fetchColumn();
+            if ($previousEmail === false) {
+                $pdo->prepare('INSERT INTO email_identities(player_id,email,password_hash,email_verified_at) VALUES(?,?,NULL,UTC_TIMESTAMP())')
+                    ->execute([$playerId,$email]);
+            } elseif ($previousEmail !== $email) {
+                // Google returned a newly verified address for the same immutable subject.
+                // Move the email identity so old addresses cannot reset this player.
+                $pdo->prepare('UPDATE email_identities SET email=?,email_verified_at=UTC_TIMESTAMP() WHERE player_id=?')
+                    ->execute([$email,$playerId]);
+            }
         }
         $pdo->commit();
     } catch (Throwable $e) {
