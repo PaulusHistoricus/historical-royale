@@ -1,4 +1,6 @@
--- Legion Royale: MariaDB 11.4+, utf8mb4. Apply once in Plesk phpMyAdmin.
+-- Legion Royale full account schema for MariaDB 11.4+. Select the database before running.
+SET SESSION foreign_key_checks = 1;
+
 CREATE TABLE IF NOT EXISTS players (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   public_id CHAR(36) NOT NULL UNIQUE,
@@ -91,8 +93,7 @@ CREATE TABLE IF NOT EXISTS match_participants (
   CONSTRAINT fk_participant_player FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Migration 001: email login and 15-minute password setup/reset tokens.
--- Import ONCE in phpMyAdmin after database/schema.sql if deployed already.
+-- Email login and 15-minute password setup/reset tokens.
 CREATE TABLE IF NOT EXISTS email_identities (
   player_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
   email VARCHAR(254) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,

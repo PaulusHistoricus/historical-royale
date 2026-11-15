@@ -16,10 +16,46 @@ Plesk: Database name `LegionRoyale` (your actual Plesk name may be prefixed), re
 `legionroyale.paulushistoricus.nl`; create only one dedicated user (`legionroyale_app`) with
 **local connections only** and access only to the game database.
 
-For a new database, import `database/schema.sql` once. If `schema.sql` was already imported, run **only** `database/migrations/001_email_auth.sql` in phpMyAdmin; do not re-import the full schema. The schema provides
-players, linked Google identities, progression, wallets, audit ledger, inventory, decks,
-achievements, and match history. Gameplay, shop, achievements and matchmaking are **not
-yet wired to these tables**. New-account/profile creation works after configuration. Email login also requires working Cloud86 SMTP.
+In **Mijn Cloud86**, open your hosting plan in Plesk. Go to **Databases → LegionRoyale →
+phpMyAdmin**. Confirm the database name in the phpMyAdmin header. If the database
+already contains data, export a SQL backup before importing.
+
+| Database state | File to select under **Import** |
+| --- | --- |
+| Empty database | `database/schema.sql` |
+| Interrupted import with missing base tables, including a failed attempt to import 001 before the base schema | `database/schema.sql` |
+| Complete base schema from an older release, with email auth missing or only partially installed | `database/migrations/001_email_auth.sql` |
+
+Leave **Enable foreign key checks** selected and run the import. The full schema
+creates `players` first, then creates the tables that reference it, including the
+three email-auth tables. A successful full import needs only that one file.
+If an import of repository SQL stops partway through, retry the corresponding
+file. Both files use `CREATE TABLE IF NOT EXISTS`, so compatible existing tables,
+player profiles, credentials and balances are preserved.
+
+If you see `#1005 / Errcode: 150`, check for `players` in **Structure**. If it is
+missing, use the full schema. If it exists, run `SHOW CREATE TABLE players;` in
+the **SQL** tab and check for InnoDB and an indexed primary key `id BIGINT UNSIGNED`.
+An existing table with a different definition needs a migration tailored to that
+definition. These imports only create missing tables.
+
+After a full import, confirm 13 InnoDB tables and 11 foreign keys in the game
+database:
+
+```sql
+SELECT DATABASE(), VERSION();
+SELECT COUNT(*) AS innodb_tables
+FROM information_schema.TABLES
+WHERE TABLE_SCHEMA = DATABASE() AND ENGINE = 'InnoDB';
+SELECT COUNT(*) AS foreign_keys
+FROM information_schema.REFERENTIAL_CONSTRAINTS
+WHERE CONSTRAINT_SCHEMA = DATABASE();
+```
+
+The schema provides players, Google and email identities, password setup/reset
+tokens, rate limits, progression, wallets, achievements, inventory, decks and
+match history. New-account creation needs the PHP configuration below. Email
+login also needs working Cloud86 SMTP.
 
 ## 2. Google OAuth application
 
@@ -124,7 +160,7 @@ to that same player. Consequently, XP, coins, decks and achievements belong to O
 
 Existing Google users are supported: the callback migrates their verified Google
 email to `email_identities` on next sign-in; password reset also checks the older
-`google_identities` rows. **Apply the SQL migration before deploying PHP.**
+`google_identities` rows. **Complete the database import before deploying PHP.**
 
 ### Cloud86 SMTP config
 
