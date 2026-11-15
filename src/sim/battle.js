@@ -157,7 +157,7 @@ export function chooseTarget(state, unit) {
   for (const e of enemies) {
     const dx = e.x - unit.x;
     const behind = dx * forward < 0;
-    if (!behind && Math.abs(dx) > DETECTION_RANGE) continue;
+    if (!behind && Math.abs(dx) > DETECTION_RANGE && unit.card.type !== 'spy') continue;
     if (!best || Math.abs(dx) < Math.abs(best.x - unit.x) ||
         (Math.abs(dx) === Math.abs(best.x - unit.x) && e.id < best.id)) best = e;
   }
