@@ -10,7 +10,7 @@ header('X-Frame-Options: DENY');
 function config(): array {
     static $data = null;
     if ($data !== null) return $data;
-    $path = dirname(__DIR__, 3) . '/private/legionroyale.php';
+    $path = dirname(__DIR__, 2) . '/private/legionroyale.php';
     if (!is_file($path)) throw new RuntimeException('Private server configuration is missing');
     $data = require $path;
     if (!is_array($data)) throw new RuntimeException('Invalid private server configuration');
