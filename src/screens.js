@@ -18,6 +18,13 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const root = document.createElement('div');
 root.id = 'lr-screens';
 document.body.append(root);
+// Phaser luistert op window ook naar tikken búíten het canvas. Zonder dit tikt een knop in
+// deze schermen 'door' naar het spel eronder (bv. Menu -> meteen de Spelen-knop).
+export function shieldFromGame(el) {
+  for (const t of ['touchstart', 'touchend', 'touchcancel', 'mousedown', 'mouseup'])
+    el.addEventListener(t, e => e.stopPropagation());
+}
+shieldFromGame(root);
 
 /** Kaartplaatje uit cards.png (zelfde sprite als de kaartenbalk). */
 function cardImg(type, h = 120) {
@@ -29,12 +36,14 @@ function cardImg(type, h = 120) {
 }
 
 let current = null;
+let openedAt = 0;
 function open(name, html, onMount) {
-  current = name;
+  current = name; openedAt = performance.now();
   root.innerHTML = `<div class="lr-screen" data-screen="${name}" role="dialog" aria-modal="true">
     <div class="lr-sheet">${html}<button class="lr-close" aria-label="Close">✕</button></div></div>`;
   root.querySelector('.lr-close').onclick = close;
-  root.querySelector('.lr-screen').addEventListener('pointerdown', e => { if (e.target.classList.contains('lr-screen')) close(); });
+  // Naast het paneel tikken sluit, behalve bij de uitslag (daar tik je vaak nog door van het gevecht).
+  if (name !== 'result') root.querySelector('.lr-screen').addEventListener('pointerdown', e => { if (e.target.classList.contains('lr-screen')) close(); });
   onMount?.(root.querySelector('.lr-sheet'));
 }
 function close() { current = null; root.innerHTML = ''; window.dispatchEvent(new Event('lr:screen-closed')); }
@@ -261,8 +270,10 @@ function showResult({ winner, reward, error, guest }) {
       <button class="lr-bigbtn" id="lr-again"><img src="${artUrl('result-button')}" alt=""><span>${win ? 'Play again' : 'Try again'}</span></button>
       <button class="lr-bigbtn small" id="lr-menu"><img src="${artUrl('result-button')}" alt=""><span>Menu</span></button></div>`, el => {
     el.querySelector('.lr-close').remove();
-    el.querySelector('#lr-again').onclick = () => { close(); window.dispatchEvent(new Event('lr:again')); };
-    el.querySelector('#lr-menu').onclick = () => { close(); window.dispatchEvent(new Event('lr:to-menu')); };
+    // Eerste halve seconde negeren: een tik die nog voor het gevecht bedoeld was, telt niet.
+    const go = ev => () => { if (performance.now() - openedAt < 600) return; close(); window.dispatchEvent(new Event(ev)); };
+    el.querySelector('#lr-again').onclick = go('lr:again');
+    el.querySelector('#lr-menu').onclick = go('lr:to-menu');
   });
   root.querySelector('.lr-screen').style.setProperty('--result-bg', `url(${artUrl('result-bg')})`);
 }

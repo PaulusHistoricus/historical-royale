@@ -3,6 +3,7 @@
 import './auth.css';
 const root = document.createElement('div');
 root.id = 'auth-ui';
+for (const t of ['touchstart', 'touchend', 'touchcancel', 'mousedown', 'mouseup']) root.addEventListener(t, e => e.stopPropagation());   // niet doortikken naar Phaser
 root.innerHTML = `
   <div class="lr-profile" id="lr-profile" hidden>
     <img id="lr-avatar" alt="" hidden>

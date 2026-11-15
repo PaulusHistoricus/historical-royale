@@ -22,12 +22,28 @@ function startSession(): void {
         throw new RuntimeException('HTTPS is required');
     }
     session_name('lr_session');
+    // Ingelogd blijven: cookie en sessie 30 dagen, verlengd bij gebruik. Sessiebestanden staan in
+    // private/sessions (buiten de webroot), zodat de opruiming van de hosting ze niet na 24 min weggooit.
     session_set_cookie_params([
-        'lifetime' => 0, 'path' => '/', 'secure' => true, 'httponly' => true, 'samesite' => 'Lax',
+        'lifetime' => SESSION_DAYS * 86400, 'path' => '/', 'secure' => true, 'httponly' => true, 'samesite' => 'Lax',
     ]);
+    $dir = dirname(__DIR__, 2) . '/private/sessions';
+    if (!is_dir($dir)) @mkdir($dir, 0700, true);
+    if (is_dir($dir) && is_writable($dir)) session_save_path($dir);
+    ini_set('session.gc_maxlifetime', (string)(SESSION_DAYS * 86400));
     ini_set('session.use_strict_mode', '1');
     ini_set('session.use_only_cookies', '1');
     session_start();
+}
+const SESSION_DAYS = 30;
+/** Sessiecookie opnieuw zetten zodat de 30 dagen telkens opnieuw ingaan. */
+function refreshSessionCookie(): void {
+    if (session_status() !== PHP_SESSION_ACTIVE || headers_sent()) return;
+    $last = $_SESSION['cookie_refreshed'] ?? 0;
+    if (time() - $last < 86400) return;
+    $_SESSION['cookie_refreshed'] = time();
+    setcookie(session_name(), session_id(), ['expires' => time() + SESSION_DAYS * 86400, 'path' => '/',
+        'secure' => true, 'httponly' => true, 'samesite' => 'Lax']);
 }
 function db(): PDO {
     static $pdo = null;
@@ -134,6 +150,7 @@ function sessionPlayer(): ?array {
     );
     $statement->execute([$id]);
     $row = $statement->fetch() ?: null;
+    if ($row) refreshSessionCookie();
     if ($row) {   // online-status voor vrienden; hooguit eens per minuut schrijven
         try { db()->prepare('UPDATE players SET last_seen_at=UTC_TIMESTAMP() WHERE id=? AND (last_seen_at IS NULL OR last_seen_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 60 SECOND))')->execute([$id]); }
         catch (Throwable $e) { /* kolom ontbreekt nog (migratie 002 niet gedraaid): niet fataal */ }
