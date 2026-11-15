@@ -282,7 +282,7 @@ export function step(state, dt) {
     // Genezeres geneest alleen biologische bondgenoten, nooit zichzelf.
     if (u.card.type === 'healer' && u.cd <= 0) {
       const allies = state.units.filter(a => a.id !== u.id && a.side === u.side && a.hp > 0 &&
-        a.card.material === 'bio' && a.hp < a.max && gap(u, a) <= u.card.healRange);
+        a.card.material === 'bio' && a.hp < a.max && canFight(state, u, a) && gap(u, a) <= u.card.healRange);
       allies.sort((a, b) => a.hp / a.max - b.hp / b.max || a.id - b.id);
       if (allies.length) {
         const ally = allies[0];
