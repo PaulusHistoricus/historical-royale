@@ -7,3 +7,4 @@ private/legionroyale.php
 .env
 .env.*
 !.env.example
+private/sessions/
