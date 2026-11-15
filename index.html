@@ -13,6 +13,12 @@
   <!-- Het spel vult het hele scherm; de stage blijft binnen de veilige zone (notch, browserbalken). -->
   <div id="game"><div id="stage"></div></div>
 
+  <!-- Telefoon rechtop: het spel is altijd liggend. -->
+  <div id="rotate" aria-live="polite">
+    <div class="rotate-phone"></div>
+    <p>Draai je toestel<br><small>Rotate your device</small></p>
+  </div>
+
   <!-- Laadscherm: logo verschijnt meteen (zoals bij Relic Slide) en blijft tot alle art geladen is. Tik = overslaan zodra klaar. -->
   <div id="splash" aria-hidden="true">
     <img src="assets/art/logo.webp" alt="" width="1200" height="675">

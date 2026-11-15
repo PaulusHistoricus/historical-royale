@@ -25,3 +25,12 @@ canvas { display: block; }
 .splash-bar span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #c98f2a, #ffe08a); transition: width .2s; }
 @keyframes lrIntroLogo { 0% { opacity: 0; transform: scale(.86) } 35% { opacity: 1; transform: scale(1) } 100% { opacity: 1; transform: scale(1.03) } }
 @media (prefers-reduced-motion: reduce) { #splash img { animation: none } }
+
+/* Telefoon/tablet rechtop: vraag om te draaien (het spel is altijd liggend). */
+#rotate { display: none; position: fixed; inset: 0; z-index: 900; flex-direction: column; align-items: center; justify-content: center;
+  gap: 28px; background: radial-gradient(circle at 50% 45%, #3a2814, #0d0805 75%); color: #f3d48c; text-align: center; }
+#rotate p { margin: 0; font-size: 24px; font-weight: bold; letter-spacing: .04em; }
+#rotate small { font-size: 15px; color: #d6c6a2; font-weight: normal; }
+.rotate-phone { width: 70px; height: 120px; border: 5px solid #f3d48c; border-radius: 14px; animation: lrRotate 2s ease-in-out infinite; }
+@keyframes lrRotate { 0%, 20% { transform: rotate(0) } 55%, 100% { transform: rotate(-90deg) } }
+@media (orientation: portrait) and (pointer: coarse) { #rotate { display: flex; } }
