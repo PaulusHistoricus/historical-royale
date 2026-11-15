@@ -54,6 +54,7 @@ const SFX = {   // groep -> [bestanden, volume, minimale tijd tussen twee keer (
   collapse: [['tower-collapse'], 0.7, 250],
 };
 const FEMALE = new Set(['healer', 'spy']);
+let autoFullscreenDone = false;
 
 // Levend vuur bovenop de geschilderde schadestadia: [x, y, grootte, soort] in framepixels
 // (tower 128x180, castle 333x404), per stadium 0..4. Soort: vuur (standaard), 'torch' of 'smoke'.
@@ -266,7 +267,9 @@ class Menu extends Phaser.Scene {
 
   play() {
     // Op telefoons: schermvullend en liggend, de fijnste manier om te spelen.
-    if (this.sys.game.device.input.touch && this.scale.fullscreen.available && !this.scale.isFullscreen) {
+    // Eén keer per bezoek automatisch: de browser toont bij elke keer volledig scherm een melding.
+    if (this.sys.game.device.input.touch && this.scale.fullscreen.available && !document.fullscreenElement && !autoFullscreenDone) {
+      autoFullscreenDone = true;
       try { this.scale.startFullscreen(); screen.orientation?.lock?.('landscape').catch(() => {}); } catch {}
     }
     this.cameras.main.fadeOut(220, 0, 0, 0);
@@ -511,7 +514,7 @@ class Battle extends Phaser.Scene {
   createFullscreenButton() {
     this.fsButton = this.add.zone(0, 0, 26, 26).setInteractive({ useHandCursor: true }).setDepth(1300);
     this.fsButton.on('pointerdown', () => {
-      if (this.scale.isFullscreen) { this.scale.stopFullscreen(); return; }
+      if (document.fullscreenElement) { this.scale.stopFullscreen(); return; }
       this.scale.startFullscreen();
       screen.orientation?.lock?.('landscape').catch(() => {});   // Android: liggend vastzetten
     });
