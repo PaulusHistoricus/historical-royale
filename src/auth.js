@@ -55,11 +55,12 @@ async function checkSession() {
     const response = await fetch('/api/me.php', { credentials: 'same-origin', cache: 'no-store' });
     if (!response.ok) throw new Error('Authentication server is not configured');
     session = await response.json();
+    if (typeof session.authenticated !== 'boolean') throw new Error('Invalid authentication response');
   } catch {
     session = { authenticated: false };
     showError('Google sign-in is not configured on this server yet. You can still play as a guest.');
     byId('lr-auth-google').setAttribute('aria-disabled', 'true');
-    byId('lr-auth-google').addEventListener('click', event => event.preventDefault(), { once: true });
+    byId('lr-auth-google').removeAttribute('href');
   }
   if (qs.has('login_error')) showError('Sign-in could not be completed. Please try again.');
   if (qs.has('login') || qs.has('login_error')) {
