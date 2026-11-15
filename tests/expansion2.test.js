@@ -16,7 +16,7 @@ const run = (state, seconds, onTick) => {
 const NEW = ['spartan', 'plague', 'banner', 'flamegi', 'lancer', 'assassin'];
 
 test('1+2. zes nieuwe kaarten: kosten, levens, snelheid en interval zoals afgesproken; plaatsen kost energie', () => {
-  const want = { spartan: [4, 340, 32, 1.35], plague: [4, 110, 40, 2.3], banner: [5, 175, 45, 1.4],
+  const want = { spartan: [4, 560, 32, 1.35], plague: [4, 110, 40, 2.3], banner: [5, 175, 45, 1.4],
     flamegi: [5, 170, 31, 0.4], lancer: [4, 205, 105, 1.1], assassin: [3, 105, 90, 0.9] };
   for (const t of NEW) {
     const c = card(t);

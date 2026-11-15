@@ -54,7 +54,7 @@ export const CARDS = [
     minUnitDamagePct: 0.50, maxUnitDamagePct: 0.75, towerDamagePct: 0.10, duration: 1.7 },
   // Unit expansion 2 (zie docs/unit-expansion-2.md). Achteraan, zodat bestaande kaartindexen gelijk blijven.
   { name: 'Spartan Guardian', type: 'spartan', role: 'melee', material: 'bio', cost: 4,
-    hp: 340, damage: 23, range: 26, speed: 32, rate: 1.35, radius: 17, shieldPct: 0.4, shieldRange: 65 },
+    hp: 560, damage: 23, range: 26, speed: 32, rate: 1.35, radius: 17, shieldPct: 0.4, shieldRange: 65 },   // tank (was 340)
   { name: 'Plague Doctor', type: 'plague', role: 'ranged', material: 'bio', cost: 4, support: true,
     hp: 110, damage: 12, range: 105, speed: 40, rate: 2.3, radius: 12, poisonDps: 8, poisonSeconds: 4, spreadRange: 35 },
   { name: 'Banner Maiden', type: 'banner', role: 'melee', material: 'bio', cost: 5, support: true,
