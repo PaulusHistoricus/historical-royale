@@ -1,0 +1,144 @@
+<?php
+declare(strict_types=1);
+// Shared Cloud86/Plesk authentication bootstrap; PHP >= 8.1, PDO_mysql, curl.
+// This file is public code; secrets are loaded ONLY from a sibling private folder.
+header('X-Content-Type-Options: nosniff');
+header('Cache-Control: no-store, private');
+header('Referrer-Policy: no-referrer');
+header('X-Frame-Options: DENY');
+
+function config(): array {
+    static $data = null;
+    if ($data !== null) return $data;
+    $path = dirname(__DIR__, 2) . '/private/legionroyale.php';
+    if (!is_file($path)) throw new RuntimeException('Private server configuration is missing');
+    $data = require $path;
+    if (!is_array($data)) throw new RuntimeException('Invalid private server configuration');
+    return $data;
+}
+function startSession(): void {
+    if (session_status() === PHP_SESSION_ACTIVE) return;
+    if (empty($_SERVER['HTTPS']) || $_SERVER['HTTPS'] === 'off') {
+        throw new RuntimeException('HTTPS is required');
+    }
+    session_name('lr_session');
+    session_set_cookie_params([
+        'lifetime' => 0, 'path' => '/', 'secure' => true, 'httponly' => true, 'samesite' => 'Lax',
+    ]);
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.use_only_cookies', '1');
+    session_start();
+}
+function db(): PDO {
+    static $pdo = null;
+    if ($pdo) return $pdo;
+    $c = config();
+    $dsn = sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4',
+        $c['db_host'], (int)($c['db_port'] ?? 3306), $c['db_name']);
+    $pdo = new PDO($dsn, $c['db_user'], $c['db_password'], [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES => false,
+    ]);
+    return $pdo;
+}
+function jsonResponse(array $payload, int $status = 200): never {
+    http_response_code($status);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+    exit;
+}
+function failSafe(Throwable $e): never {
+    error_log('[legionroyale-auth] ' . $e->getMessage());
+    jsonResponse(['error' => 'Service temporarily unavailable'], 503);
+}
+function requireOrigin(): void {
+    $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+    $site = config()['site_origin'];
+    // POST endpoints accept same-origin requests only.
+    if ($origin !== $site) jsonResponse(['error' => 'Invalid request origin'], 403);
+}
+function csrfToken(): string {
+    if (!isset($_SESSION['csrf'])) $_SESSION['csrf'] = bin2hex(random_bytes(24));
+    return $_SESSION['csrf'];
+}
+function requireCsrf(): void {
+    $header = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+    if ($header === '' || !hash_equals(csrfToken(), $header)) jsonResponse(['error' => 'Invalid CSRF token'], 403);
+}
+function googleRequest(string $url, array $post = []): array {
+    $curl = curl_init($url);
+    if ($curl === false) throw new RuntimeException('Cannot initialize HTTPS request');
+    $options = [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT => 12,
+        CURLOPT_FOLLOWLOCATION => false,
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_SSL_VERIFYHOST => 2,
+        CURLOPT_HTTPHEADER => ['Accept: application/json'],
+    ];
+    if ($post) {
+        $options[CURLOPT_POST] = true;
+        $options[CURLOPT_POSTFIELDS] = http_build_query($post, '', '&', PHP_QUERY_RFC3986);
+    }
+    curl_setopt_array($curl, $options);
+    $body = curl_exec($curl);
+    $status = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+    curl_close($curl);
+    if (!is_string($body) || $status !== 200) throw new RuntimeException('Google OAuth request failed (HTTP ' . $status . ')');
+    $data = json_decode($body, true);
+    if (!is_array($data)) throw new RuntimeException('Invalid OAuth JSON');
+    return $data;
+}
+/** Verify Google's RS256 ID token locally with Google's rotating X.509 public keys. */
+function verifyGoogleIdToken(string $jwt, string $clientId, string $expectedNonce): array {
+    $parts = explode('.', $jwt);
+    if (count($parts) !== 3 || strlen($jwt) > 10000) throw new RuntimeException('Malformed Google ID token');
+    $decode = static function(string $part): string|false {
+        return base64_decode(strtr($part, '-_', '+/'), true);
+    };
+    $header = json_decode($decode($parts[0]) ?: '', true);
+    $claims = json_decode($decode($parts[1]) ?: '', true);
+    $signature = $decode($parts[2]);
+    if (!is_array($header) || !is_array($claims) || !is_string($signature) ||
+        ($header['alg'] ?? '') !== 'RS256' || empty($header['kid']) ||
+        !is_string($header['kid'])) throw new RuntimeException('Invalid Google token header');
+    $certs = function_exists('apcu_fetch') ? apcu_fetch('legionroyale_google_certs_v1') : false;
+    if (!is_array($certs) || !isset($certs[$header['kid']])) {
+        $certs = googleRequest('https://www.googleapis.com/oauth2/v1/certs');
+        if (function_exists('apcu_store')) apcu_store('legionroyale_google_certs_v1', $certs, 900);
+    }
+    $pem = $certs[$header['kid']] ?? null;
+    if (!is_string($pem) || openssl_verify($parts[0] . '.' . $parts[1], $signature, $pem, OPENSSL_ALGO_SHA256) !== 1) {
+        throw new RuntimeException('Google token signature verification failed');
+    }
+    if (!in_array($claims['iss'] ?? '', ['accounts.google.com', 'https://accounts.google.com'], true) ||
+        !hash_equals($clientId, (string)($claims['aud'] ?? '')) ||
+        (int)($claims['exp'] ?? 0) <= time() ||
+        (int)($claims['iat'] ?? 0) > time() + 60 ||
+        !hash_equals($expectedNonce, (string)($claims['nonce'] ?? '')) ||
+        !isset($claims['sub']) || !is_string($claims['sub']) ||
+        strlen($claims['sub']) > 255 || $claims['sub'] === '') {
+        throw new RuntimeException('Google token claim verification failed');
+    }
+    return $claims;
+}
+function sessionPlayer(): ?array {
+    $id = $_SESSION['player_id'] ?? null;
+    if (!is_int($id) || $id < 1) return null;
+    $statement = db()->prepare(
+      'SELECT p.id, p.public_id, p.display_name, p.avatar_url, pr.level, pr.xp, pr.wins, pr.losses, w.coins
+       FROM players p JOIN player_progress pr ON pr.player_id=p.id JOIN wallets w ON w.player_id=p.id
+       WHERE p.id = ? LIMIT 1'
+    );
+    $statement->execute([$id]);
+    return $statement->fetch() ?: null;
+}
+function publicPlayer(array $p): array {
+    return [
+        'id' => $p['public_id'], 'name' => $p['display_name'], 'avatar' => $p['avatar_url'],
+        'level' => (int)$p['level'], 'xp' => (int)$p['xp'],
+        'wins' => (int)$p['wins'], 'losses' => (int)$p['losses'], 'coins' => (int)$p['coins'],
+    ];
+}

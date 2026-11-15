@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import './style.css';
+import './auth.js';
 import { W, LANES, FIELD_BOTTOM, CARDS, DEPLOY_ZONE, MATCH_SECONDS, ENERGY_MAX } from './sim/config.js';
 import * as sim from './sim/battle.js';
 import { createHand, playFromHand, HAND_SIZE } from './sim/hand.js';
@@ -120,6 +121,7 @@ class Menu extends Phaser.Scene {
   constructor() { super('menu'); }
 
   create() {
+    window.dispatchEvent(new Event('lr:menu'));
     this.bg = this.add.image(0, 0, 'menu-bg');
     this.chars = ['menu-healer', 'menu-legionary', 'menu-samurai', 'menu-pilot'].map(k => this.add.image(0, 0, k).setOrigin(0.5, 1));
     this.titlePlate = this.add.image(0, 0, 'menu-title');
@@ -248,6 +250,7 @@ class Battle extends Phaser.Scene {
   }
 
   create() {
+    window.dispatchEvent(new Event('lr:battle'));
     this.texts = [];
     this.state = createBattle();
     this.accumulator = 0;

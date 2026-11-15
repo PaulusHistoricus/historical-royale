@@ -1,3 +1,9 @@
 node_modules
 dist
 __pycache__
+
+# Real Cloud86 credentials: never commit
+private/legionroyale.php
+.env
+.env.*
+!.env.example
