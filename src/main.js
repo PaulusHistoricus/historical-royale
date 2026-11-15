@@ -509,7 +509,13 @@ class Battle extends Phaser.Scene {
           healer.lockUntil = now + healer.sprite.anims.currentAnim.duration;
         }
         const ally = this.state.units.find(u => u.id === e.targetId);
-        this.sparks.push({ x: e.to.x, y: (ally ? footY(ally) : e.to.y) - 30, t: 0, dur: 0.55, color: 0xffe27a, heal: true });
+        const healerUnit = this.state.units.find(u => u.id === e.attackerId);
+        const ay = (ally ? footY(ally) : e.to.y) - 30;
+        this.sparks.push({ x: e.to.x, y: ay, t: 0, dur: 0.55, color: 0xffe27a, heal: true });
+        if (healerUnit) this.sparks.push({ x: healerUnit.x + healerUnit.facing * 20, y: footY(healerUnit) - 44, tx: e.to.x, ty: ay, t: 0, dur: 0.35, color: 0x9dffb0, beam: true });
+        const plus = this.add.text(e.to.x, ay - 14, '+' + Math.round(e.amount), textStyle(11, '#8dffa3', { strokeThickness: 3 }))
+          .setOrigin(0.5).setDepth(1020).setResolution(clamp(Math.ceil(this.view.zoom), 1, 4));
+        this.tweens.add({ targets: plus, y: plus.y - 18, alpha: 0, duration: 900, onComplete: () => plus.destroy() });
       } else if (e.type === 'cloak') {
         const v = this.views.get(e.id);
         if (v) {
@@ -678,11 +684,24 @@ class Battle extends Phaser.Scene {
       const ud = UNIT_ART[u.card.type], flip = u.facing < 0;
       v.sprite.setPosition(u.x, fy).setFlipX(flip).setOrigin(flip ? 1 - ud.originX : ud.originX, ud.originY)
         .setDepth(fy).setAlpha(alpha);
-      if (now >= v.lockUntil) {
-        const anim = u.state === 'move' ? 'walk' : u.card.type === 'spy' && u.channelTargetId ? 'charm' : 'idle';
-        v.sprite.anims.play(`${v.sprite.texture.key}:${anim}`, true);
+      if (u.state === 'charmed') {
+        // Betoverd: bevroren, roze, hartjes en een balk die toont hoe lang je nog hebt om te redden.
+        if (!v.sprite.anims.isPaused) v.sprite.anims.pause();
+        const spy = this.state.units.find(x => x.id === u.charmedBy);
+        const k = spy ? clamp(spy.channelProgress / spy.card.channelTime, 0, 1) : 0;
+        const top = fy - (UNIT_HEIGHT[u.card.type] ?? 56) - 9;
+        b.fillStyle(0x1d1a16, 0.9).fillRoundedRect(u.x - 16, top, 32, 5, 2);
+        b.fillStyle(0xff6fd0).fillRoundedRect(u.x - 16, top, 32 * k, 5, 2);
+        if (Math.random() < 0.08) this.sparks.push({ x: u.x + (Math.random() - 0.5) * 18, y: fy - 40, t: 0, dur: 0.7, color: 0xff7ad9, heart: true });
+      } else {
+        if (v.sprite.anims.isPaused) v.sprite.anims.resume();
+        if (now >= v.lockUntil) {
+          const anim = u.state === 'move' ? 'walk' : u.card.type === 'spy' && u.channelTargetId ? 'charm' : 'idle';
+          v.sprite.anims.play(`${v.sprite.texture.key}:${anim}`, true);
+        }
       }
-      if (now < v.flashUntil) v.sprite.setTint(0xff9a8a);
+      if (u.state === 'charmed') v.sprite.setTint(0xff9ad8);
+      else if (now < v.flashUntil) v.sprite.setTint(0xff9a8a);
       else if (now < (v.charmUntil ?? 0)) v.sprite.setTint(0xffa6e8);
       else if (u.hidden) v.sprite.setTint(0xb48cff);
       else v.sprite.clearTint();
@@ -768,6 +787,17 @@ class Battle extends Phaser.Scene {
       s.t += dt;
       const k = s.t / s.dur;
       if (k >= 1) return false;
+      if (s.heart) {   // hartje dat opstijgt
+        const hx = s.x, hy = s.y - k * 18, r = 2.2;
+        g.fillStyle(s.color, 1 - k).fillCircle(hx - r * 0.55, hy, r).fillCircle(hx + r * 0.55, hy, r)
+          .fillTriangle(hx - r * 1.5, hy + r * 0.3, hx + r * 1.5, hy + r * 0.3, hx, hy + r * 2.2);
+        return true;
+      }
+      if (s.beam) {    // lichtstraal van genezeres naar bondgenoot
+        g.lineStyle(3, s.color, (1 - k) * 0.8).lineBetween(s.x, s.y, s.tx, s.ty);
+        g.lineStyle(1.2, 0xffffff, (1 - k) * 0.9).lineBetween(s.x, s.y, s.tx, s.ty);
+        return true;
+      }
       if (s.heal) {   // opstijgende gouden (genezen) of roze (betoverd) glinsters
         for (let i = 0; i < 6; i++) {
           const a = i * 1.05 + s.x, rr = 8 + 6 * Math.sin(a * 3);

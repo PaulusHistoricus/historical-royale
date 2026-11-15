@@ -151,7 +151,8 @@ def build_units(SRC, OUT, MANIFEST):
         fx={'cloak':{4,5},'reveal':{0},'death':{4,5}})
     manifest['samurai']=build(OUT,'samurai',G,112,'idle',{'-red':ident,'-blue':toblue})
     G=board_unit(SRC+'spion-bord.png',{'idle':(5,158,4,410,1110),'walk':(168,302,6),'attack':(312,440,6),
-        'charm':(447,580,8),'hit':(700,826,3,410,930),'death':(835,990,6)},410,1528,fx={'death':{4,5}})
+        'charm':(447,580,8),'hit':(700,826,3,410,930),'death':(835,990,6)},410,1528,fx={'death':{4,5}},
+        bg_blobs=False)   # zwart pak = kleur van het bord
     manifest['spy']=build(OUT,'spy',G,110,'idle',{'':ident})
     G=board_unit(SRC+'genezeres-bord.png',{'idle':(5,155,4,400,1160),'walk':(165,312,6),'heal':(320,485,6),
         'attack':(490,640,6),'hit':(648,790,3,400,880),'death':(798,970,7)},400,1532,fx={'death':{5,6}})
