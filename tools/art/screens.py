@@ -9,7 +9,7 @@ from PIL import Image
 from extract import fg_mask, matte
 
 ELEMENTS = {   # bronbestand -> (textuurnaam, breedte in textuurpixels)
-    'menu-titelbord.png': ('menu-title', 1000),
+    'menu-titelbord.png': ('menu-title', 1200),
     'menu-knop-spelen.png': ('menu-play', 760),
     'menu-knop-gevecht.png': ('menu-battle', 760),
     'menu-knop-team.png': ('menu-team', 760),
@@ -67,6 +67,9 @@ def build_screens(SRC, OUT, MANIFEST):
     # maskable: veilige zone (80%) met de rand opgevuld
     m = Image.new('RGB', (512, 512), (40, 24, 12)); m.paste(icon.resize((420, 420), Image.LANCZOS), (46, 46))
     m.save(f'{pub}/icon-maskable-512.png', optimize=True)
+    # Achtergrond van het overwinnings-/verliesscherm (DOM, src/screens.css).
+    rb = Image.open(SRC + 'overwinning-achtergrond.png').convert('RGB')
+    rb.resize((1280, round(rb.height * 1280 / rb.width)), Image.LANCZOS).save(f'{OUT}/result-bg.webp', quality=82, method=6)
     info = {}
     for src, (name, width) in ELEMENTS.items():
         im = _cutout(SRC + src, width)
