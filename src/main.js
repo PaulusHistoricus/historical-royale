@@ -7,6 +7,8 @@ import UNIT_ART from './art/units.json';
 import WORLD_ART from './art/world.json';
 import CARD_ART from './art/cards.json';
 import BAR_ART from './art/cardbar.json';
+import FX_ART from './art/effects.json';
+import SCREEN_ART from './art/screens.json';
 import { VERSION_LABEL, ensureLatestBuild } from './version.js';
 const { createBattle, deploy, step, findById, gap } = sim;
 
@@ -51,17 +53,13 @@ const unitTexture = (type, side) => {
 const textStyle = (size, color, extra) => ({ fontFamily: FONT, fontSize: size + 'px', fontStyle: 'bold', color,
   stroke: '#2a1d10', strokeThickness: Math.max(2, size / 5), resolution: 2, ...extra });
 
-class Battle extends Phaser.Scene {
-  constructor() { super('battle'); }
 
-  text(x, y, str, size, color = '#fff4d6', extra = {}) {
-    const t = this.add.text(x, y, str, textStyle(size, color, extra));
-    t.baseSize = size;
-    this.texts.push(t);
-    return t;
-  }
+// Laadt alle art, toont de voortgang op het laadscherm (index.html) en maakt de animaties.
+class Boot extends Phaser.Scene {
+  constructor() { super('boot'); }
 
   preload() {
+    this.load.on('progress', p => window.__splash?.progress(p));
     this.load.image('arena', ART + 'arena.jpg');
     for (const def of Object.values(UNIT_ART)) {
       for (const key of def.textures) {
@@ -76,9 +74,15 @@ class Battle extends Phaser.Scene {
         this.load.spritesheet(`${kind}-${side}`, ART + `${kind}-${side}.png`, { frameWidth: def.frameWidth, frameHeight: def.frameHeight });
       }
     }
+    this.load.spritesheet('fx-fire', ART + 'fx-fire.jpg', { frameWidth: FX_ART.fire.frameWidth, frameHeight: FX_ART.fire.frameHeight });
+    for (const side of ['blue', 'red']) {
+      this.load.spritesheet(`p51-${side}`, ART + `p51-${side}.png`, { frameWidth: FX_ART.p51.frameWidth, frameHeight: FX_ART.p51.frameHeight });
+    }
+    this.load.image('menu-bg', ART + 'menu-bg.webp');
+    for (const key of Object.keys(SCREEN_ART)) this.load.image(key, ART + key + '.webp');
   }
 
-  createAnimations() {
+  create() {
     for (const [type, def] of Object.entries(UNIT_ART)) {
       const card = CARDS.find(c => c.type === type);
       for (const tex of def.textures) {
@@ -87,17 +91,123 @@ class Battle extends Phaser.Scene {
           if (this.anims.exists(key)) continue;
           // Aanvalsanimatie past altijd binnen de aanvalssnelheid.
           const duration = name === 'attack' ? Math.min(card.rate * 0.85, 0.75) : null;
-          const frameRate = duration ? frames.length / duration : { idle: 5, walk: 10, hit: 12, death: 9 }[name];
+          const frameRate = duration ? frames.length / duration
+            : { idle: 5, walk: 10, hit: 12, death: 9, heal: 10, charm: 8, cloak: 10, reveal: 12 }[name] ?? 10;
           this.anims.create({ key, frames: frames.map(frame => ({ key: tex, frame })), frameRate,
-            repeat: name === 'idle' || name === 'walk' ? -1 : 0 });
+            repeat: ['idle', 'walk', 'charm'].includes(name) ? -1 : 0 });
         }
       }
     }
+    this.anims.create({ key: 'fx-fire:burst', frames: this.anims.generateFrameNumbers('fx-fire'), frameRate: 14 });
+    this.anims.create({ key: 'fx-fire:burn', frames: this.anims.generateFrameNumbers('fx-fire', { frames: [2, 3, 4, 3] }), frameRate: 10, repeat: -1 });
+    window.__splash?.done();
+    this.scene.start(new URLSearchParams(location.search).has('play') ? 'battle' : 'menu');
+  }
+}
+
+// Hoofdmenu, opgebouwd uit losse elementen zodat het op elk scherm past.
+// Alleen Spelen werkt; de rest toont "binnenkort".
+class Menu extends Phaser.Scene {
+  constructor() { super('menu'); }
+
+  create() {
+    this.bg = this.add.image(0, 0, 'menu-bg');
+    this.chars = ['menu-healer', 'menu-legionary', 'menu-samurai', 'menu-pilot'].map(k => this.add.image(0, 0, k).setOrigin(0.5, 1));
+    this.titlePlate = this.add.image(0, 0, 'menu-title');
+    this.title = this.add.text(0, 0, 'LEGION ROYALE', { fontFamily: FONT, fontStyle: 'bold', color: '#ffd978',
+      stroke: '#3a1d05', align: 'center' }).setOrigin(0.5);
+    this.title.setShadow(0, 3, '#000000', 6, true, true);
+    this.buttons = ['menu-play', 'menu-battle', 'menu-team', 'menu-settings'].map((key, i) => {
+      const img = this.add.image(0, 0, key).setInteractive({ useHandCursor: true });
+      img.on('pointerover', () => img.setTint(0xfff0c8));
+      img.on('pointerout', () => img.clearTint());
+      img.on('pointerdown', () => this.press(img, i === 0 ? () => this.play() : null));
+      return img;
+    });
+    this.icons = ['menu-trophy', 'menu-gift', 'menu-bell'].map(key => {
+      const img = this.add.image(0, 0, key).setInteractive({ useHandCursor: true });
+      img.on('pointerdown', () => this.press(img, null));
+      return img;
+    });
+    this.toast = this.add.text(0, 0, '', { fontFamily: FONT, fontStyle: 'bold', color: '#fff4d6', stroke: '#2a1d10',
+      backgroundColor: '#1b130bcc', padding: { x: 14, y: 8 } }).setOrigin(0.5).setDepth(10).setAlpha(0);
+    this.version = this.add.text(0, 0, VERSION_LABEL, { fontFamily: FONT, color: '#f5e6c4', stroke: '#000', strokeThickness: 3 }).setOrigin(1, 1);
+    this.scale.on('resize', this.layout, this);
+    this.events.once('shutdown', () => this.scale.off('resize', this.layout, this));
+    this.layout();
+  }
+
+  update(time) {
+    // Spelen-knop 'ademt' zacht; schaal = layout-schaal x puls.
+    const b = this.buttons[0];
+    if (b.baseScale) b.setScale(b.baseScale * (b.pressed ? 0.94 : 1 + 0.025 * Math.sin(time / 300)));
+  }
+
+  press(img, action) {
+    img.pressed = true; img.setScale(img.baseScale * 0.94);
+    this.time.delayedCall(120, () => { img.pressed = false; img.setScale(img.baseScale); });
+    if (action) { this.time.delayedCall(140, action); return; }
+    this.toast.setText('Coming soon').setAlpha(1);
+    this.tweens.killTweensOf(this.toast);
+    this.tweens.add({ targets: this.toast, alpha: 0, delay: 1100, duration: 400 });
+  }
+
+  play() {
+    // Op telefoons: schermvullend en liggend, de fijnste manier om te spelen.
+    if (this.sys.game.device.input.touch && this.scale.fullscreen.available && !this.scale.isFullscreen) {
+      try { this.scale.startFullscreen(); screen.orientation?.lock?.('landscape').catch(() => {}); } catch {}
+    }
+    this.cameras.main.fadeOut(220, 0, 0, 0);
+    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('battle'));
+  }
+
+  layout() {
+    const w = this.scale.width, h = this.scale.height, portrait = w / h < 1.1;
+    this.cameras.main.setViewport(0, 0, w, h);
+    const bgs = Math.max(w / this.bg.width, h / this.bg.height);
+    this.bg.setPosition(w / 2, h / 2).setScale(bgs);
+    // Middenkolom: titelbord + 4 knoppen, past altijd in breedte en hoogte.
+    const colW = Math.min(w * (portrait ? 0.86 : 0.36), 640);
+    const tS = colW * 1.18 / SCREEN_ART['menu-title'].width;
+    const bS = colW / SCREEN_ART['menu-play'].width;
+    const titleH = SCREEN_ART['menu-title'].height * tS, btnH = SCREEN_ART['menu-play'].height * bS;
+    const gap = btnH * 0.1, total = titleH + btnH * 0.35 + 4 * btnH + 3 * gap;
+    const k = Math.min(1, (h * 0.9) / total);              // lage schermen: alles iets kleiner
+    let y = h / 2 - total * k / 2;
+    this.titlePlate.setScale(tS * k).setPosition(w / 2, y + titleH * k / 2);
+    this.title.setPosition(w / 2, y + titleH * k * 0.56).setFontSize(Math.round(titleH * k * 0.27))
+      .setStroke('#3a1d05', Math.max(3, titleH * k * 0.025));
+    y += titleH * k + btnH * 0.35 * k;
+    this.buttons.forEach(b => { b.baseScale = bS * k; b.setScale(bS * k).setPosition(w / 2, y + btnH * k / 2); y += (btnH + gap) * k; });
+    // Iconen rechtsboven
+    const iS = Math.min(h, w) * 0.12 / SCREEN_ART['menu-trophy'].width, iW = SCREEN_ART['menu-trophy'].width * iS;
+    this.icons.forEach((ic, i) => (ic.baseScale = iS, ic).setScale(iS).setPosition(w - iW * (2.6 - i) * 1.08 - iW * 0.3, iW * 0.7));
+    // Personages aan de zijkanten, alleen als er ruimte is
+    const side = (w - colW) / 2, show = !portrait && side > w * 0.18;
+    const ch = h * 0.62;
+    const place = [[0.16, 0], [0.33, 1], [0.67, 2], [0.86, 3]];
+    for (const [fx, idx] of place) {
+      const c = this.chars[idx];
+      c.setVisible(show).setScale(ch / c.height).setPosition(w * fx, h + 2).setFlipX(false);
+    }
+    this.toast.setPosition(w / 2, h * 0.92).setFontSize(Math.max(16, Math.round(h * 0.03)));
+    this.version.setPosition(w - 10, h - 8).setFontSize(Math.max(11, Math.round(h * 0.018)));
+    for (const t of [this.title, this.toast, this.version]) t.setResolution(1);
+  }
+}
+
+class Battle extends Phaser.Scene {
+  constructor() { super('battle'); }
+
+  text(x, y, str, size, color = '#fff4d6', extra = {}) {
+    const t = this.add.text(x, y, str, textStyle(size, color, extra));
+    t.baseSize = size;
+    this.texts.push(t);
+    return t;
   }
 
   create() {
     this.texts = [];
-    this.createAnimations();
     this.state = createBattle();
     this.accumulator = 0;
     this.selected = null;          // gekozen vak in de hand (0..3), of null
@@ -105,7 +215,7 @@ class Battle extends Phaser.Scene {
     this.views = new Map();        // eenheid-id -> { sprite, type, lockUntil, flashUntil }
     this.projectiles = [];         // puur visueel
     this.sparks = [];
-    this.extraUnits = this.add.graphics().setDepth(500);
+    this.planes = new Map();       // P-51 overvluchten: strike-id -> sprite
     if (DEBUG) window.__HR__ = { scene: this, state: this.state, sim };
 
     this.backdrop = this.add.graphics().setDepth(-20);   // vult de ruimte rond veld en balk
@@ -293,14 +403,25 @@ class Battle extends Phaser.Scene {
     const now = this.time.now;
     for (const e of events) {
       if (e.type === 'heal') {
-        this.sparks.push({ x: e.to.x, y: e.to.y - 30, t: 0, dur: 0.45, color: 0x74efaa });
+        const healer = this.views.get(e.attackerId);
+        if (healer) {
+          healer.sprite.anims.play(`${healer.sprite.texture.key}:heal`);
+          healer.lockUntil = now + healer.sprite.anims.currentAnim.duration;
+        }
+        const ally = this.state.units.find(u => u.id === e.targetId);
+        this.sparks.push({ x: e.to.x, y: (ally ? footY(ally) : e.to.y) - 30, t: 0, dur: 0.55, color: 0xffe27a, heal: true });
       } else if (e.type === 'possess') {
-        this.sparks.push({ x: e.x, y: e.y - 28, t: 0, dur: 0.6, color: 0xc18bff, big: true });
+        const target = this.state.units.find(u => u.id === e.targetId);
+        this.sparks.push({ x: e.x, y: (target ? footY(target) : e.y) - 30, t: 0, dur: 0.7, color: 0xff7ad9, heal: true });
       } else if (e.type === 'hit') {
         const attacker = this.views.get(e.attackerId);
-        if (attacker?.sprite) {
-          attacker.sprite.anims.play(`${attacker.sprite.texture.key}:attack`);
+        if (attacker?.sprite && now >= (attacker.sameTick ?? 0)) {
+          // Samoerai: eerste klap uit de schaduw is de 'reveal strike'.
+          const anim = attacker.type === 'samurai' && !attacker.revealed ? 'reveal' : 'attack';
+          if (attacker.type === 'samurai') attacker.revealed = true;
+          attacker.sprite.anims.play(`${attacker.sprite.texture.key}:${anim}`);
           attacker.lockUntil = now + attacker.sprite.anims.currentAnim.duration;
+          attacker.sameTick = now + 1;   // vuurpot raakt meerdere: animatie maar één keer
         }
         const target = this.views.get(e.targetId);
         if (target) {
@@ -318,6 +439,7 @@ class Battle extends Phaser.Scene {
         const view = this.views.get(e.id);
         if (view) {
           this.views.delete(e.id);
+          view.burn?.destroy();
           if (view.sprite) {
             view.sprite.clearTint().anims.play(`${view.sprite.texture.key}:death`);
             this.tweens.add({ targets: view.sprite, alpha: 0, delay: 1300, duration: 700, onComplete: () => view.sprite.destroy() });
@@ -333,22 +455,35 @@ class Battle extends Phaser.Scene {
     const dir = e.to.x >= e.from.x ? 1 : -1;
     const targetUnit = this.state.units.find(u => u.id === e.targetId);
     const targetY = targetUnit ? footY(targetUnit) - 26 : this.structureTop(e.targetId) + 30;
-    if (MELEE_KINDS.has(e.kind) || e.kind === 'p51') {
+    if (MELEE_KINDS.has(e.kind)) {
       this.sparks.push({ x: e.to.x - dir * 6, y: targetY, t: 0, dur: 0.22, color: 0xfff1b8 });
       return;
+    }
+    if (e.kind === 'p51') {   // kogelregen uit het vliegtuig
+      const lane = this.state.units.find(u => u.id === e.targetId)?.lane ?? 0;
+      for (let i = 0; i < 3; i++) this.projectiles.push({ kind: 'bullet', x0: e.to.x - dir * (30 + i * 8), y0: LANES[lane] - 62,
+        x1: e.to.x + (i - 1) * 6, y1: targetY + 10, t: -i * 0.04, dur: 0.12, arc: 0 });
+      this.sparks.push({ x: e.to.x, y: targetY + 8, t: 0, dur: 0.3, color: 0xffc04a, big: true });
+      return;
+    }
+    if (e.kind === 'firethrower') {   // één vuurpot per worp, ook al raakt hij meerdere vijanden
+      const key = e.attackerId + ':' + Math.round(this.state.time * 10);
+      if (this.lastPot === key) return;
+      this.lastPot = key;
     }
     let x0, y0;
     const attacker = this.state.units.find(u => u.id === e.attackerId);
     if (attacker) {
-      x0 = attacker.x + dir * (e.kind === 'musket' ? 30 : 22);
-      y0 = footY(attacker) - ({ cannon: 26, horse_archer: 50, musket: 38 }[e.kind] ?? 34);
+      x0 = attacker.x + dir * ({ musket: 30, healer: 34 }[e.kind] ?? 22);
+      y0 = footY(attacker) - ({ cannon: 26, horse_archer: 50, musket: 38, healer: 40, firethrower: 44 }[e.kind] ?? 34);
       if (e.kind === 'musket') this.sparks.push({ x: x0, y: y0, t: 0, dur: 0.12, color: 0xffc04a });
     }
     else { x0 = e.from.x; y0 = this.structureTop(e.attackerId) + 10; }
     const dist = Math.abs(e.to.x - x0);
-    this.projectiles.push({ kind: e.kind === 'cannon' ? 'ball' : e.kind === 'musket' ? 'bullet' : 'arrow', x0, y0, x1: e.to.x, y1: targetY,
-      t: 0, dur: Math.max(e.kind === 'musket' ? 0.06 : 0.12, dist / ({ cannon: 520, musket: 1600 }[e.kind] ?? 760)),
-      arc: { cannon: 26, musket: 0 }[e.kind] ?? 10 });
+    const kind = { cannon: 'ball', musket: 'bullet', healer: 'bolt', firethrower: 'pot' }[e.kind] ?? 'arrow';
+    this.projectiles.push({ kind, x0, y0, x1: e.to.x, y1: targetY,
+      t: 0, dur: Math.max(e.kind === 'musket' ? 0.06 : 0.12, dist / ({ cannon: 520, musket: 1600, healer: 900, firethrower: 420 }[e.kind] ?? 760)),
+      arc: { cannon: 26, musket: 0, healer: 0, firethrower: 34 }[e.kind] ?? 10 });
   }
 
   structureTop(id) {
@@ -361,10 +496,14 @@ class Battle extends Phaser.Scene {
     g.fillStyle(0x1b130b, 0.9).fillRoundedRect(W / 2 - 220, 72, 440, 120, 14);
     g.lineStyle(3, 0xd9b26a).strokeRoundedRect(W / 2 - 220, 72, 440, 120, 14);
     this.text(W / 2, 112, winner === 'blue' ? 'VICTORY!' : 'DEFEAT!', 34, winner === 'blue' ? '#c4f3c0' : '#ffc0b5').setOrigin(0.5).setDepth(3001);
-    this.text(W / 2, 160, 'Tap to play again', 15).setOrigin(0.5).setDepth(3001);
+    const again = this.text(W / 2 - 90, 162, 'PLAY AGAIN', 15).setOrigin(0.5).setDepth(3001);
+    const menu = this.text(W / 2 + 90, 162, 'MENU', 15, '#e6d2a6').setOrigin(0.5).setDepth(3001);
     for (const t of this.texts) t.setResolution(clamp(Math.ceil(this.view.zoom), 1, 4));
     this.selected = null;
-    this.time.delayedCall(400, () => this.input.once('pointerdown', () => this.scene.restart()));
+    this.time.delayedCall(400, () => {
+      again.setInteractive({ useHandCursor: true }).once('pointerdown', () => this.scene.restart());
+      menu.setInteractive({ useHandCursor: true }).once('pointerdown', () => this.scene.start('menu'));
+    });
   }
 
   update(_time, delta) {
@@ -388,35 +527,42 @@ class Battle extends Phaser.Scene {
     for (const u of this.state.units) {
       if (this.views.has(u.id)) continue;
       const def = UNIT_ART[u.card.type];
-      const sprite = def
-        ? this.add.sprite(u.x, footY(u), unitTexture(u.card.type, u.side), def.anims.idle[0])
-          .setOrigin(def.originX, def.originY).setScale(1 / TEX)
-        : null;
-      this.views.set(u.id, { sprite, type: u.card.type, lockUntil: 0, flashUntil: 0 });
+      const sprite = this.add.sprite(u.x, footY(u), unitTexture(u.card.type, u.side), def.anims.idle[0])
+        .setOrigin(def.originX, def.originY).setScale(1 / TEX);
+      this.views.set(u.id, { sprite, type: u.card.type, side: u.side, lockUntil: 0, flashUntil: 0, burn: null, revealed: false });
     }
   }
 
   drawUnits() {
     const now = this.time.now, g = this.ground, b = this.bars;
     g.clear(); b.clear();
-    this.extraUnits.clear();
     for (const u of this.state.units) {
       const v = this.views.get(u.id);
       const fy = footY(u);
-      if (v.sprite) {
-        v.sprite.setPosition(u.x, fy).setFlipX(u.facing < 0).setDepth(fy)
-          .setAlpha(u.hidden ? (u.side === 'blue' ? 0.3 : 0) : 1);
-        if (now >= v.lockUntil) v.sprite.anims.play(`${v.sprite.texture.key}:${u.state === 'move' ? 'walk' : 'idle'}`, true);
-        if (now < v.flashUntil) v.sprite.setTint(0xff9a8a); else v.sprite.clearTint();
-      } else if (!u.hidden || u.side === 'blue') {
-        const g = this.extraUnits, alpha = u.hidden ? 0.25 : 1;
-        g.fillStyle(TEAM[u.side], alpha).fillRoundedRect(u.x - 9, fy - 37, 18, 29, 4);
-        g.fillStyle(0xf2d4a0, alpha).fillCircle(u.x, fy - 41, 7);
-        g.lineStyle(3, 0xe8d8b5, alpha).lineBetween(u.x, fy - 30, u.x + u.facing * 20, fy - 39);
-        if (u.card.type === 'healer') g.fillStyle(0x80ffc2, alpha).fillCircle(u.x + 1, fy - 29, 4);
-        if (u.card.type === 'firethrower') g.fillStyle(0xffa142, alpha).fillCircle(u.x + u.facing * 19, fy - 40, 4);
-        if (u.card.type === 'spy') g.fillStyle(0xc28cff, alpha).fillCircle(u.x, fy - 28, 3);
+      // Overgenomen door een spion: andere teamkleur.
+      if (v.side !== u.side) {
+        v.side = u.side;
+        v.sprite.setTexture(unitTexture(u.card.type, u.side));
+        v.lockUntil = 0;
+        v.charmUntil = now + 700;
       }
+      // Schaduwsamoerai: eigen speler ziet een schim, de tegenstander niets.
+      const alpha = u.hidden ? (u.side === 'blue' ? 0.35 : 0) : 1;
+      v.sprite.setPosition(u.x, fy).setFlipX(u.facing < 0).setDepth(fy).setAlpha(alpha);
+      if (now >= v.lockUntil) {
+        const anim = u.state === 'move' ? 'walk' : u.card.type === 'spy' && u.channelTargetId ? 'charm' : 'idle';
+        v.sprite.anims.play(`${v.sprite.texture.key}:${anim}`, true);
+      }
+      if (now < v.flashUntil) v.sprite.setTint(0xff9a8a);
+      else if (now < (v.charmUntil ?? 0)) v.sprite.setTint(0xffa6e8);
+      else if (u.hidden) v.sprite.setTint(0xb48cff);
+      else v.sprite.clearTint();
+      // Brandende eenheden: vlammetjes (additief).
+      if (u.burnRemaining > 0) {
+        if (!v.burn) v.burn = this.add.sprite(u.x, fy, 'fx-fire').setOrigin(0.5, 1).setScale(0.22)
+          .setBlendMode(Phaser.BlendModes.ADD).play('fx-fire:burn');
+        v.burn.setPosition(u.x, fy - 6).setDepth(fy + 0.5).setAlpha(Math.min(1, u.burnRemaining));
+      } else if (v.burn) { v.burn.destroy(); v.burn = null; }
 
       const w = u.card.type === 'cannon' || MOUNTED.has(u.card.type) ? 42 : 26;
       if (!u.hidden || u.side === 'blue') {
@@ -451,7 +597,16 @@ class Battle extends Phaser.Scene {
       const k = Math.min(1, p.t / p.dur);
       const x = p.x0 + (p.x1 - p.x0) * k;
       const y = p.y0 + (p.y1 - p.y0) * k - Math.sin(k * Math.PI) * p.arc;
-      if (p.kind === 'bullet') {
+      if (p.t < 0) return true;
+      if (p.kind === 'bolt') {
+        g.fillStyle(0x4fb4ff, 0.35).fillCircle(x, y, 6);
+        g.fillStyle(0xbfe6ff).fillCircle(x, y, 2.6);
+        g.lineStyle(2, 0x6fc6ff, 0.6).lineBetween(x - Math.sign(p.x1 - p.x0) * 14, y, x, y);
+      } else if (p.kind === 'pot') {
+        g.fillStyle(0xff9a2e, 0.45).fillCircle(x - Math.sign(p.x1 - p.x0) * 5, y - 2, 6);
+        g.fillStyle(0x9a5428).fillCircle(x, y, 3.8);
+        g.fillStyle(0xffd36b).fillCircle(x, y - 3, 2);
+      } else if (p.kind === 'bullet') {
         g.lineStyle(1.4, 0xffe6a0, 0.8).lineBetween(x - Math.sign(p.x1 - p.x0) * 10, y, x, y);
         g.fillStyle(0x3a3530).fillCircle(x, y, 1.6);
       } else if (p.kind === 'arrow') {
@@ -467,6 +622,11 @@ class Battle extends Phaser.Scene {
         g.fillStyle(0x24221f).fillCircle(x, y, 3.6);
         g.fillStyle(0x8a8580).fillCircle(x - 1, y - 1, 1.2);
       }
+      if (k >= 1 && p.kind === 'pot') {
+        this.add.sprite(p.x1, p.y1 + 30, 'fx-fire').setOrigin(0.5, 1).setScale(0.42).setDepth(p.y1 + 40)
+          .setBlendMode(Phaser.BlendModes.ADD).play('fx-fire:burst').once('animationcomplete', (_a, _f, spr) => spr.destroy());
+        return false;
+      }
       if (k >= 1) {
         this.sparks.push(p.kind === 'ball'
           ? { x: p.x1, y: p.y1 + 8, t: 0, dur: 0.38, color: 0xffa040, big: true }
@@ -479,6 +639,14 @@ class Battle extends Phaser.Scene {
       s.t += dt;
       const k = s.t / s.dur;
       if (k >= 1) return false;
+      if (s.heal) {   // opstijgende gouden (genezen) of roze (betoverd) glinsters
+        for (let i = 0; i < 6; i++) {
+          const a = i * 1.05 + s.x, rr = 8 + 6 * Math.sin(a * 3);
+          g.fillStyle(s.color, (1 - k) * 0.9).fillCircle(s.x + Math.cos(a) * rr, s.y - k * 22 + Math.sin(a) * 5, 1.8);
+        }
+        g.fillStyle(s.color, (1 - k) * 0.25).fillCircle(s.x, s.y, 14 * (0.5 + k));
+        return true;
+      }
       const r = (s.big ? 16 : 7) * (0.4 + k);
       g.fillStyle(s.color, (1 - k) * 0.7).fillCircle(s.x, s.y, r);
       if (s.big) g.fillStyle(0x6b6560, (1 - k) * 0.5).fillCircle(s.x + 4, s.y - 8 - k * 10, r * 0.8);
@@ -491,16 +659,27 @@ class Battle extends Phaser.Scene {
   }
 
   drawAirstrikes() {
-    // Temporary P-51 silhouette. Will be replaced by painted aircraft sprite.
-    const g = this.extraUnits;
+    const live = new Set();
     for (const strike of this.state.airstrikes) {
+      live.add(strike.id);
       const fraction = strike.time / strike.duration;
       const x = (strike.side === 'blue' ? 245 : 715) + (strike.side === 'blue' ? 520 : -520) * fraction;
-      const y = LANES[strike.lane] - 58;
-      const dir = strike.side === 'blue' ? 1 : -1;
-      g.fillStyle(0xd6d8cb, 0.95).fillTriangle(x + dir * 25, y, x - dir * 20, y - 8, x - dir * 20, y + 8);
-      g.fillStyle(0x67735d, 0.95).fillTriangle(x + dir * 3, y, x - dir * 12, y - 17, x - dir * 12, y + 17);
-      g.lineStyle(2, 0xffe39c, 0.7).lineBetween(x - dir * 28, y + 5, x - dir * 45, y + 11);
+      const y = LANES[strike.lane] - 64 - Math.sin(fraction * Math.PI) * 10;
+      let plane = this.planes.get(strike.id);
+      if (!plane) {
+        plane = this.add.sprite(x, y, `p51-${strike.side}`, 1).setScale(0.55).setDepth(900).setFlipX(strike.side === 'red');
+        this.planes.set(strike.id, plane);
+      }
+      const firing = strike.hitIds.length && Math.floor(this.time.now / 70) % 2 === 0;
+      plane.setPosition(x, y).setFrame(firing ? 2 : 1 + 2 * (Math.floor(this.time.now / 60) % 2))
+        .setAngle(strike.side === 'blue' ? 4 : -4);
+      this.ground.fillStyle(0x000000, 0.18).fillEllipse(x, LANES[strike.lane] + 10, 60, 8);
+    }
+    for (const [id, plane] of this.planes) {
+      if (live.has(id)) continue;
+      this.planes.delete(id);
+      this.tweens.add({ targets: plane, x: plane.x + (plane.flipX ? -220 : 220), y: plane.y - 70, alpha: 0, duration: 600,
+        onComplete: () => plane.destroy() });
     }
   }
 
@@ -584,8 +763,9 @@ const game = new Phaser.Game({
   backgroundColor: '#15100a',
   scale: { mode: Phaser.Scale.NONE, zoom: 1 / initial.ratio },
   render: { antialias: true, roundPixels: false },
-  scene: [Battle],
+  scene: [Boot, Menu, Battle],
 });
+if (DEBUG) window.__game = game;
 let resizeTimer = null;
 function resizeGame() {
   clearTimeout(resizeTimer);

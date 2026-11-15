@@ -1,0 +1,12 @@
+{
+ "fire": {
+  "frameWidth": 170,
+  "frameHeight": 114,
+  "frames": 6
+ },
+ "p51": {
+  "frameWidth": 189,
+  "frameHeight": 104,
+  "frames": 4
+ }
+}

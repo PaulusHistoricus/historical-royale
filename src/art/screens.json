@@ -1,0 +1,50 @@
+{
+ "menu-title": {
+  "width": 1000,
+  "height": 330
+ },
+ "menu-play": {
+  "width": 760,
+  "height": 215
+ },
+ "menu-battle": {
+  "width": 760,
+  "height": 230
+ },
+ "menu-team": {
+  "width": 760,
+  "height": 207
+ },
+ "menu-settings": {
+  "width": 760,
+  "height": 237
+ },
+ "menu-trophy": {
+  "width": 200,
+  "height": 188
+ },
+ "menu-bell": {
+  "width": 200,
+  "height": 198
+ },
+ "menu-gift": {
+  "width": 200,
+  "height": 202
+ },
+ "menu-healer": {
+  "width": 560,
+  "height": 656
+ },
+ "menu-legionary": {
+  "width": 560,
+  "height": 598
+ },
+ "menu-samurai": {
+  "width": 560,
+  "height": 650
+ },
+ "menu-pilot": {
+  "width": 700,
+  "height": 586
+ }
+}

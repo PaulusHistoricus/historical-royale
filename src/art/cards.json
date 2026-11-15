@@ -1,55 +1,90 @@
 {
- "frameWidth": 188,
+ "frameWidth": 198,
  "frameHeight": 196,
  "cards": {
   "melee": {
    "frame": 0,
-   "gemX": 35.0,
+   "gemX": 40.0,
    "gemY": 26.2,
    "gemR": 23.1,
    "width": 164
   },
   "archer": {
    "frame": 1,
-   "gemX": 35.5,
+   "gemX": 40.5,
    "gemY": 25.8,
    "gemR": 22.9,
    "width": 161
   },
   "cannon": {
    "frame": 2,
-   "gemX": 37.2,
+   "gemX": 42.2,
    "gemY": 25.8,
    "gemR": 22.9,
    "width": 160
   },
   "cavalry": {
    "frame": 3,
-   "gemX": 35.8,
+   "gemX": 40.8,
    "gemY": 26.2,
    "gemR": 22.8,
    "width": 161
   },
   "berserker": {
    "frame": 4,
-   "gemX": 25.5,
+   "gemX": 30.5,
    "gemY": 27.0,
    "gemR": 23.1,
    "width": 183
   },
   "horse_archer": {
    "frame": 5,
-   "gemX": 26.1,
+   "gemX": 31.1,
    "gemY": 27.1,
    "gemR": 23.3,
    "width": 182
   },
   "musket": {
    "frame": 6,
-   "gemX": 24.5,
+   "gemX": 29.5,
    "gemY": 26.2,
    "gemR": 23.5,
    "width": 186
+  },
+  "healer": {
+   "frame": 7,
+   "gemX": 32.4,
+   "gemY": 27.4,
+   "gemR": 20.6,
+   "width": 196
+  },
+  "samurai": {
+   "frame": 8,
+   "gemX": 42.4,
+   "gemY": 27.4,
+   "gemR": 20.6,
+   "width": 165
+  },
+  "spy": {
+   "frame": 9,
+   "gemX": 32.4,
+   "gemY": 27.4,
+   "gemR": 20.6,
+   "width": 196
+  },
+  "firethrower": {
+   "frame": 10,
+   "gemX": 32.4,
+   "gemY": 27.4,
+   "gemR": 20.6,
+   "width": 196
+  },
+  "p51": {
+   "frame": 11,
+   "gemX": 32.4,
+   "gemY": 27.4,
+   "gemR": 20.6,
+   "width": 196
   }
  }
 }

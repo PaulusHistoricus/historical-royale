@@ -321,5 +321,223 @@
    "musket-blue",
    "musket-red"
   ]
+ },
+ "firethrower": {
+  "frameWidth": 186,
+  "frameHeight": 117,
+  "originX": 0.5269,
+  "originY": 0.9829,
+  "anims": {
+   "idle": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "walk": [
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "attack": [
+    10,
+    11,
+    12,
+    13,
+    14
+   ],
+   "hit": [
+    15,
+    16,
+    17
+   ],
+   "death": [
+    18,
+    19,
+    20,
+    21,
+    22,
+    23
+   ]
+  },
+  "textures": [
+   "firethrower-red",
+   "firethrower-blue"
+  ]
+ },
+ "samurai": {
+  "frameWidth": 204,
+  "frameHeight": 117,
+  "originX": 0.4216,
+  "originY": 0.9829,
+  "anims": {
+   "idle": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "walk": [
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "cloak": [
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+   ],
+   "attack": [
+    16,
+    17,
+    18,
+    19,
+    20,
+    21
+   ],
+   "reveal": [
+    22,
+    23,
+    24,
+    25
+   ],
+   "hit": [
+    26,
+    27,
+    28
+   ],
+   "death": [
+    29,
+    30,
+    31,
+    32,
+    33,
+    34
+   ]
+  },
+  "textures": [
+   "samurai-red",
+   "samurai-blue"
+  ]
+ },
+ "spy": {
+  "frameWidth": 178,
+  "frameHeight": 117,
+  "originX": 0.5225,
+  "originY": 0.9829,
+  "anims": {
+   "idle": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "walk": [
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "attack": [
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+   ],
+   "charm": [
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23
+   ],
+   "hit": [
+    24,
+    25,
+    26
+   ],
+   "death": [
+    27,
+    28,
+    29,
+    30,
+    31,
+    32
+   ]
+  },
+  "textures": [
+   "spy"
+  ]
+ },
+ "healer": {
+  "frameWidth": 218,
+  "frameHeight": 124,
+  "originX": 0.289,
+  "originY": 0.9839,
+  "anims": {
+   "idle": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "walk": [
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "heal": [
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+   ],
+   "attack": [
+    16,
+    17,
+    18,
+    19,
+    20,
+    21
+   ],
+   "hit": [
+    22,
+    23,
+    24
+   ],
+   "death": [
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31
+   ]
+  },
+  "textures": [
+   "healer"
+  ]
  }
 }

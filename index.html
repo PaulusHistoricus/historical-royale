@@ -13,6 +13,26 @@
   <!-- Het spel vult het hele scherm; de stage blijft binnen de veilige zone (notch, browserbalken). -->
   <div id="game"><div id="stage"></div></div>
 
+  <!-- Laadscherm: logo verschijnt meteen (zoals bij Relic Slide) en blijft tot alle art geladen is. Tik = overslaan zodra klaar. -->
+  <div id="splash" aria-hidden="true">
+    <img src="assets/art/logo.webp" alt="" width="1200" height="675">
+    <div class="splash-bar"><span></span></div>
+  </div>
+  <script>
+    (() => {
+      const el = document.getElementById('splash'), bar = el.querySelector('span');
+      let seen = false; try { seen = !!sessionStorage.getItem('lr-intro'); sessionStorage.setItem('lr-intro', '1'); } catch (e) {}
+      const minUntil = performance.now() + (seen ? 500 : 2200);
+      let loaded = false, closed = false;
+      const close = () => { if (closed || !loaded) return; closed = true; el.classList.add('out'); setTimeout(() => el.remove(), 600); };
+      el.addEventListener('click', close);
+      window.__splash = {
+        progress: p => { bar.style.width = Math.round(p * 100) + '%'; },
+        done: () => { loaded = true; bar.style.width = '100%'; setTimeout(close, Math.max(0, minUntil - performance.now())); },
+      };
+    })();
+  </script>
+
   <!-- Onder het spel: uitleg en advertentie, nooit over het speelveld heen. -->
   <section class="below">
     <h1>Legion Royale</h1>

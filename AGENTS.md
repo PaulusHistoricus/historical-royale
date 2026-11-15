@@ -33,6 +33,8 @@ Lees dit voordat je iets aan Historical Royale wijzigt.
 - `{type:'destroyed', id, kind, side}`
 - `{type:'end', winner}`
 
+Scènes (v0.12): `Boot` laadt alle art (voortgang op het laadscherm in `index.html`) en maakt de animaties → `Menu` (losse elementen, alleen Spelen werkt) → `Battle`. `?play` slaat het menu over.
+
 Zo werkt de weergave nu:
 
 - Elke eenheid krijgt een sprite (`this.views`). `unit.state === 'move'` → animatie `walk`, anders `idle`.
