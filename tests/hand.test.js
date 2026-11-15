@@ -53,3 +53,13 @@ test('ongeldig vak verandert de hand niet', () => {
   assert.equal(playFromHand(hand, 4), null);
   assert.equal(JSON.stringify([hand.slots, hand.drawPile, hand.discard]), before);
 });
+
+test('hand uit een deck van 8 bevat alleen kaarten uit dat deck', () => {
+  const deck = [11, 9, 8, 7, 0, 1, 2, 6];
+  const hand = createHand(deck, () => 0.37);
+  for (let i = 0; i < 40; i++) {
+    assert.ok(hand.slots.every(c => deck.includes(c)));
+    playFromHand(hand, i % 4);
+  }
+  assert.throws(() => createHand([1, 2, 3]));
+});

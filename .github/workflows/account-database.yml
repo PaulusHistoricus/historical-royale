@@ -3,12 +3,16 @@ on:
   pull_request:
     paths:
       - 'database/**'
+      - 'public/api/**'
+      - 'tests/api/**'
       - 'tests/database-schema.sh'
       - '.github/workflows/account-database.yml'
   push:
     branches: [main]
     paths:
       - 'database/**'
+      - 'public/api/**'
+      - 'tests/api/**'
       - 'tests/database-schema.sh'
       - '.github/workflows/account-database.yml'
 permissions:
@@ -26,7 +30,20 @@ jobs:
           --health-interval 2s
           --health-timeout 5s
           --health-retries 30
+        ports:
+          - 3306:3306
     steps:
       - uses: actions/checkout@v4
       - name: Validate install, retry and migration
         run: bash tests/database-schema.sh docker exec -i ${{ job.services.mariadb.id }} mariadb -uroot
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Create API test user
+        run: |
+          docker exec -i ${{ job.services.mariadb.id }} mariadb -uroot -e "CREATE USER IF NOT EXISTS 'lr'@'%' IDENTIFIED BY 'lrpass'; GRANT ALL ON lr_api_test.* TO 'lr'@'%';"
+      - name: PHP API integration tests
+        env:
+          LR_DB: docker exec -i ${{ job.services.mariadb.id }} mariadb -uroot
+          LR_DB_DSN: 127.0.0.1:3306:lr:lrpass
+        run: php -v && node --test tests/api/api.test.mjs
