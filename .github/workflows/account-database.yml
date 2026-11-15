@@ -1,0 +1,39 @@
+name: Account database
+on:
+  pull_request:
+    paths:
+      - 'database/**'
+      - 'tests/database-schema.sh'
+      - '.github/workflows/account-database.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'database/**'
+      - 'tests/database-schema.sh'
+      - '.github/workflows/account-database.yml'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:11.4.13
+        env:
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: '1'
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate install, retry and migration
+        run: bash tests/database-schema.sh docker exec -i ${{ job.services.mariadb.id }} mariadb -uroot
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: find public/api private -name '*.php' -exec php -l {} +

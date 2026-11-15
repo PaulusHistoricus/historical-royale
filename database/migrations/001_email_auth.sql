@@ -1,5 +1,23 @@
--- Migration 001: email login and 15-minute password setup/reset tokens.
--- Import ONCE in phpMyAdmin after database/schema.sql if deployed already.
+-- Migration 001: add email login and password setup/reset to an existing base schema.
+-- If the base schema is missing or incomplete, import ../schema.sql instead.
+SET @lr_players_ready = (
+  SELECT EXISTS (
+    SELECT 1
+    FROM information_schema.TABLES AS t
+    JOIN information_schema.COLUMNS AS c
+      ON c.TABLE_SCHEMA = t.TABLE_SCHEMA AND c.TABLE_NAME = t.TABLE_NAME
+    JOIN information_schema.STATISTICS AS i
+      ON i.TABLE_SCHEMA = t.TABLE_SCHEMA AND i.TABLE_NAME = t.TABLE_NAME
+    WHERE t.TABLE_SCHEMA = DATABASE() AND t.TABLE_NAME = 'players' AND t.ENGINE = 'InnoDB'
+      AND c.COLUMN_NAME = 'id' AND c.DATA_TYPE = 'bigint' AND c.COLUMN_TYPE LIKE '%unsigned%'
+      AND i.INDEX_NAME = 'PRIMARY' AND i.SEQ_IN_INDEX = 1 AND i.COLUMN_NAME = 'id'
+  )
+);
+EXECUTE IMMEDIATE IF(@lr_players_ready, 'DO 0',
+  'SIGNAL SQLSTATE ''45000'' SET MESSAGE_TEXT = ''001 requires InnoDB players.id BIGINT UNSIGNED primary key. Import database/schema.sql first if missing.''');
+
+SET SESSION foreign_key_checks = 1;
+
 CREATE TABLE IF NOT EXISTS email_identities (
   player_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
   email VARCHAR(254) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
