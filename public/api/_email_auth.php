@@ -13,7 +13,9 @@ function readJsonRequest(): array {
     requireOrigin();
     requireCsrf();
     if ((int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 8192) jsonResponse(['error' => 'Request too large'], 413);
-    $data = json_decode(file_get_contents('php://input') ?: '', true);
+    $body = file_get_contents('php://input', false, null, 0, 8193);
+    if (!is_string($body) || strlen($body) > 8192) jsonResponse(['error' => 'Request too large'], 413);
+    $data = json_decode($body, true);
     if (!is_array($data)) jsonResponse(['error' => 'Invalid request'], 400);
     return $data;
 }
