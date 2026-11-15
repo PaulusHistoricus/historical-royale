@@ -4,7 +4,7 @@ import { CARDS } from '../src/sim/config.js';
 import { createBattle, addUnit, deploy, step } from '../src/sim/battle.js';
 
 test('vier nieuwe eenheden kunnen naast de oorspronkelijke kaarten worden ingezet', () => {
-  assert.equal(CARDS.length, 7);
+  assert.equal(CARDS.length, 12);
   for (let index = 3; index <= 6; index++) {
     const state = createBattle({ ai: false, seed: 7 });
     const unit = deploy(state, 'blue', 0, index, 400);

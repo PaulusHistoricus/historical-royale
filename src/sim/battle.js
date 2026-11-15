@@ -44,6 +44,7 @@ export function createBattle({ seed = Date.now(), ai = true } = {}) {
     winner: null,
     energy: { blue: ENERGY_START, red: ENERGY_START },
     units: [],
+    airstrikes: [],
     structures: [],
     events: [],
     nextId: 1,
@@ -77,6 +78,8 @@ export function addUnit(state, side, lane, cardIndex, x) {
     hp: card.hp, max: card.hp, radius: card.radius, card,
     cd: 0, state: 'move', targetId: null,
     distanceTravelled: 0, chargeUsed: false,
+    hidden: card.type === 'samurai', channelTargetId: null, channelProgress: 0,
+    burnRemaining: 0, burnDps: 0,
     facing: side === 'blue' ? 1 : -1,
   };
   state.units.push(unit);
@@ -89,6 +92,12 @@ export function deploy(state, side, lane, cardIndex, x) {
   if (state.ended || !card || !(lane in LANES)) return null;
   if (state.energy[side] + 0.001 < card.cost) return null;
   state.energy[side] -= card.cost;
+  if (card.type === 'p51') {
+    const strike = { id: state.nextId++, side, lane, time: 0, duration: card.duration, hitIds: [] };
+    state.airstrikes.push(strike);
+    // deploy() kan ook buiten een step worden aangeroepen; dit event is visueel optioneel.
+    return strike;
+  }
   const zone = DEPLOY_ZONE[side];
   return addUnit(state, side, lane, cardIndex, clamp(x, zone.min, zone.max));
 }
@@ -137,7 +146,9 @@ function canFight(state, a, b) {
  *   3. Het vijandelijke gebouw van deze baan.
  */
 export function chooseTarget(state, unit) {
-  const enemies = state.units.filter(e => e.side !== unit.side && e.hp > 0 && canFight(state, unit, e));
+  const enemies = state.units.filter(e => e.side !== unit.side && e.hp > 0 && !e.hidden &&
+    canFight(state, unit, e) && (unit.card.type !== 'spy' ||
+      (e.card.material === 'bio' && e.card.cost <= unit.card.maxStealCost && e.card.type !== 'spy')));
   const current = enemies.find(e => e.id === unit.targetId);
   if (current && inRange(unit, current)) return current;
 
@@ -146,17 +157,22 @@ export function chooseTarget(state, unit) {
   for (const e of enemies) {
     const dx = e.x - unit.x;
     const behind = dx * forward < 0;
-    if (!behind && Math.abs(dx) > DETECTION_RANGE) continue;
+    if (!behind && Math.abs(dx) > DETECTION_RANGE && unit.card.type !== 'spy') continue;
     if (!best || Math.abs(dx) < Math.abs(best.x - unit.x) ||
         (Math.abs(dx) === Math.abs(best.x - unit.x) && e.id < best.id)) best = e;
   }
+  // A spy can only charm eligible biological units, never structures.
+  if (unit.card.type === 'spy') return best;
   return best ?? objectiveFor(state, unit);
 }
 
 function stepEnergy(state, dt) {
   const seconds = state.time > OVERTIME_AT ? ENERGY_SECONDS_OVERTIME : ENERGY_SECONDS;
   for (const side of ['blue', 'red']) {
-    state.energy[side] = clamp(state.energy[side] + dt / seconds, 0, ENERGY_MAX);
+    // Grote legers kosten logistiek. Nooit meer dan 30% energiestraf.
+    const count = state.units.filter(u => u.side === side && u.hp > 0).length;
+    const multiplier = count <= 4 ? 1 : count <= 7 ? 0.9 : count <= 10 ? 0.8 : 0.7;
+    state.energy[side] = clamp(state.energy[side] + dt * multiplier / seconds, 0, ENERGY_MAX);
   }
 }
 
@@ -196,18 +212,103 @@ export function step(state, dt) {
   const moves = [];
   const hits = [];
 
+  // Brandwonden werken door ongeacht de huidige actie van de eenheid.
+  for (const u of state.units) {
+    if (u.burnRemaining > 0 && u.hp > 0) {
+      const burnDt = Math.min(dt, u.burnRemaining);
+      u.hp = Math.max(0, u.hp - u.burnDps * burnDt);
+      u.burnRemaining = Math.max(0, u.burnRemaining - dt);
+    }
+  }
+
+  // De P-51 is een onraakbare, eenmalige strafe over precies één baan.
+  // Elk doelwit in de baan wordt hoogstens één keer geraakt bij het passeren.
+  for (const strike of state.airstrikes) {
+    const previous = strike.time / strike.duration;
+    strike.time = Math.min(strike.duration, strike.time + dt);
+    const progress = strike.time / strike.duration;
+    const start = strike.side === 'blue' ? 245 : 715;
+    const end = strike.side === 'blue' ? 765 : 195;
+    const x0 = start + (end - start) * previous, x1 = start + (end - start) * progress;
+    const candidates = [
+      ...state.units.filter(u => u.hp > 0 && u.side !== strike.side && u.lane === strike.lane),
+      ...state.structures.filter(t => t.hp > 0 && t.side !== strike.side && t.kind === 'tower' && t.lane === strike.lane),
+    ];
+    for (const target of candidates) {
+      if (strike.hitIds.includes(target.id) || target.x < Math.min(x0, x1) ||
+          target.x > Math.max(x0, x1)) continue;
+      const aircraft = CARDS.find(c => c.type === 'p51');
+      const pct = target.kind ? 0 : aircraft.minUnitDamagePct +
+        state.rng() * (aircraft.maxUnitDamagePct - aircraft.minUnitDamagePct);
+      const damage = target.kind
+        ? target.max * aircraft.towerDamagePct
+        : target.max * pct;
+      const before = target.hp;
+      target.hp = Math.max(0, target.hp - damage);
+      strike.hitIds.push(target.id);
+      state.events.push({ type: 'hit', kind: 'p51', side: strike.side, attackerId: strike.id,
+        targetId: target.id, from: { x: target.x, y: LANES[strike.lane] - 55 },
+        to: { x: target.x, y: target.y }, damage: before - target.hp });
+    }
+    if (strike.time >= strike.duration) {
+      state.events.push({ type: 'airstrike_done', id: strike.id, side: strike.side, lane: strike.lane });
+    }
+  }
+  state.airstrikes = state.airstrikes.filter(a => a.time < a.duration);
+
   // 1. BESLISSEN
   for (const u of state.units) {
+    if (u.hp <= 0) continue;
     u.cd = Math.max(0, u.cd - dt);
+    // Genezeres geneest alleen biologische bondgenoten, nooit zichzelf.
+    if (u.card.type === 'healer' && u.cd <= 0) {
+      const allies = state.units.filter(a => a.id !== u.id && a.side === u.side && a.hp > 0 &&
+        a.card.material === 'bio' && a.hp < a.max && gap(u, a) <= u.card.healRange);
+      allies.sort((a, b) => a.hp / a.max - b.hp / b.max || a.id - b.id);
+      if (allies.length) {
+        const ally = allies[0];
+        const amount = Math.min(ally.max - ally.hp, ally.max * u.card.healPct);
+        ally.hp += amount;
+        u.cd = u.card.rate;
+        u.state = 'attack';
+        u.targetId = ally.id;
+        state.events.push({ type: 'heal', attackerId: u.id, targetId: ally.id, amount,
+          from: { x: u.x, y: u.y }, to: { x: ally.x, y: ally.y } });
+        continue;
+      }
+    }
     const target = chooseTarget(state, u);
     u.targetId = target ? target.id : null;
     if (!target) { u.state = 'idle'; continue; }
     if (target.x !== u.x) u.facing = target.x > u.x ? 1 : -1;
 
     if (inRange(u, target)) {
-      u.state = 'attack';
-      if (u.cd <= 0) { hits.push({ attacker: u, target }); u.cd = u.card.rate; }
+      if (u.card.type === 'spy') {
+        u.state = 'attack';
+        if (u.channelTargetId !== target.id) { u.channelTargetId = target.id; u.channelProgress = 0; }
+        u.channelProgress += dt;
+        if (u.channelProgress >= u.card.channelTime) {
+          const formerSide = target.side;
+          target.side = u.side;
+          target.facing = u.side === 'blue' ? 1 : -1;
+          target.targetId = null;
+          target.channelTargetId = null;
+          target.channelProgress = 0;
+          u.hp = 0;
+          state.events.push({ type: 'possess', spyId: u.id, targetId: target.id,
+            fromSide: formerSide, toSide: u.side, x: target.x, y: target.y });
+        }
+      } else {
+        u.state = 'attack';
+        if (u.cd <= 0) {
+          hits.push({ attacker: u, target });
+          if (u.hidden) u.hidden = false; // schaduwsamoerai wordt zichtbaar bij eerste aanval
+          u.cd = u.card.rate;
+        }
+      }
     } else {
+      u.channelTargetId = null;
+      u.channelProgress = 0;
       u.state = 'move';
       // Nooit verder lopen dan tot precies op aanvalsbereik.
       const distance = Math.min(u.card.speed * dt, gap(u, target) - u.card.range);
@@ -220,7 +321,7 @@ export function step(state, dt) {
     if (s.cd > 0) continue;
     let nearest = null;
     for (const u of state.units) {
-      if (u.side === s.side || u.hp <= 0) continue;
+      if (u.side === s.side || u.hp <= 0 || u.hidden) continue;
       if (s.kind !== 'castle' && u.lane !== s.lane) continue;
       if (!inRange(s, u)) continue;
       if (!nearest || gap(s, u) < gap(s, nearest)) nearest = u;
@@ -245,6 +346,14 @@ export function step(state, dt) {
     if (attacker.card?.type === 'berserker' && attacker.hp <= attacker.max / 2) {
       damage = Math.round(damage * attacker.card.rageMultiplier);
     }
+    if (attacker.card?.type === 'samurai' && !attacker.firstStrikeDone) {
+      damage = Math.round(damage * attacker.card.stealthBonus);
+      attacker.firstStrikeDone = true;
+    }
+    // Pantser beschermt mechanische eenheden tegen gewone aanvallen, niet tegen kanonnen.
+    if (target.card?.material === 'mechanical') {
+      damage = Math.round(damage * (attacker.card?.role === 'siege' ? 1.25 : 0.85));
+    }
     const before = target.hp;
     target.hp = Math.max(0, target.hp - damage);
     state.events.push({
@@ -257,6 +366,21 @@ export function step(state, dt) {
       to: { x: target.x, y: target.y },
       damage: before - target.hp,
     });
+    if (attacker.card?.type === 'firethrower') {
+      // Vuurpotten zetten alle vijanden in een kleine cluster in brand.
+      for (const victim of state.units) {
+        if (victim.side === attacker.side || victim.hp <= 0 || victim.lane !== attacker.lane ||
+            Math.abs(victim.x - target.x) > attacker.card.splashRadius) continue;
+        victim.burnRemaining = Math.max(victim.burnRemaining, attacker.card.burnSeconds);
+        victim.burnDps = Math.max(victim.burnDps, attacker.card.burnDps);
+        if (victim !== target) {
+          victim.hp = Math.max(0, victim.hp - attacker.card.damage * 0.5);
+          state.events.push({ type: 'hit', kind: 'firethrower', side: attacker.side,
+            attackerId: attacker.id, targetId: victim.id, from: { x: attacker.x, y: attacker.y },
+            to: { x: victim.x, y: victim.y }, damage: attacker.card.damage * 0.5 });
+        }
+      }
+    }
   }
 
   // 4. OPRUIMEN
