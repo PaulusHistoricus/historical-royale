@@ -16,6 +16,7 @@ ELEMENTS = {   # bronbestand -> (textuurnaam, breedte in textuurpixels)
     'menu-knop-instellingen.png': ('menu-settings', 760),
     'menu-trofee.png': ('menu-trophy', 200),
     'menu-bel.png': ('menu-bell', 200),
+    'menu-decks.png': ('menu-decks', 200),
 }
 # Uitsneden uit menu-elementen-2.png (bronpixels): personages voor de zijkanten en het cadeau.
 SHEET2 = {

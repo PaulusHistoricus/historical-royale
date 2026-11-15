@@ -15,6 +15,7 @@
 //   'attack' – doelwit binnen bereik, staat stil en slaat/schiet op cooldown
 //   'idle'   – geen doelwit (komt alleen voor als de wedstrijd voorbij is)
 
+import { cardLevelMultiplier } from '../progression.js';
 import {
   CARDS, STRUCTURES, STRUCTURE_POSITIONS, LANES, DEPLOY_ZONE, DETECTION_RANGE,
   MATCH_SECONDS, OVERTIME_AT, ENERGY_START, ENERGY_MAX, ENERGY_SECONDS,
@@ -37,8 +38,10 @@ export function mulberry32(seed) {
   };
 }
 
-export function createBattle({ seed = Date.now(), ai = true } = {}) {
+export function createBattle({ seed = Date.now(), ai = true, cardLevels = null } = {}) {
   const state = {
+    // Kaartniveaus per kant: { blue: { melee: 3, ... }, red: { ... } }. Ontbreekt = niveau 1.
+    cardLevels: cardLevels ?? { blue: {}, red: {} },
     time: 0,
     ended: false,
     winner: null,
@@ -69,8 +72,18 @@ function makeStructure(kind, side, lane, x, y) {
 }
 
 /** Plaatst een eenheid zonder energie af te schrijven (ook handig in tests). */
+/** Kaart met de sterkte van het niveau van die kant (niveau 1 = de kaart zelf). */
+export function leveledCard(state, side, card) {
+  const level = state.cardLevels?.[side]?.[card.type] ?? 1;
+  if (level <= 1) return card;
+  const k = cardLevelMultiplier(level);
+  const scaled = { ...card, level, hp: Math.round(card.hp * k), damage: Math.round(card.damage * k) };
+  if (card.burnDps) scaled.burnDps = Math.round(card.burnDps * k);
+  return scaled;
+}
+
 export function addUnit(state, side, lane, cardIndex, x) {
-  const card = CARDS[cardIndex];
+  const card = leveledCard(state, side, CARDS[cardIndex]);
   const id = state.nextId++;
   const unit = {
     id, side, lane, x,

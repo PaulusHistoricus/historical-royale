@@ -24,7 +24,8 @@ already contains data, export a SQL backup before importing.
 | --- | --- |
 | Empty database | `database/schema.sql` |
 | Interrupted import with missing base tables, including a failed attempt to import 001 before the base schema | `database/schema.sql` |
-| Complete base schema from an older release, with email auth missing or only partially installed | `database/migrations/001_email_auth.sql` |
+| Complete base schema from an older release, with email auth missing or only partially installed | `database/migrations/001_email_auth.sql`, then `002_profile_cards_friends.sql` |
+| Database from v0.15.x (email login works) | `database/migrations/002_profile_cards_friends.sql` |
 
 Leave **Enable foreign key checks** selected and run the import. The full schema
 creates `players` first, then creates the tables that reference it, including the
@@ -39,7 +40,7 @@ the **SQL** tab and check for InnoDB and an indexed primary key `id BIGINT UNSIG
 An existing table with a different definition needs a migration tailored to that
 definition. These imports only create missing tables.
 
-After a full import, confirm 13 InnoDB tables and 11 foreign keys in the game
+After a full import (or 002), confirm 16 InnoDB tables and 15 foreign keys in the game
 database:
 
 ```sql

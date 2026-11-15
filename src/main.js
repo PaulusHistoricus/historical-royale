@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import './style.css';
 import './auth.js';
+import './screens.js';
+import { account } from './account.js';
 import { W, LANES, FIELD_BOTTOM, CARDS, DEPLOY_ZONE, MATCH_SECONDS, ENERGY_MAX } from './sim/config.js';
 import * as sim from './sim/battle.js';
 import { createHand, playFromHand, HAND_SIZE } from './sim/hand.js';
@@ -59,6 +61,8 @@ function sfx(scene, group, volume = 1) {
   scene.sound.play(files[Math.floor(Math.random() * files.length)],
     { volume: vol * volume, detune: (Math.random() - 0.5) * 160 });   // kleine toonvariatie
 }
+const openScreen = name => window.dispatchEvent(new CustomEvent('lr:open', { detail: name }));
+
 function playMusic(scene, key) {
   const cur = window.__music;
   if (cur && cur.key === key && cur.isPlaying) return;
@@ -170,14 +174,23 @@ class Menu extends Phaser.Scene {
       const img = this.add.image(0, 0, key).setInteractive({ useHandCursor: true });
       img.on('pointerover', () => img.setTint(0xfff0c8));
       img.on('pointerout', () => img.clearTint());
-      img.on('pointerdown', () => this.press(img, i === 0 ? () => this.play() : i === 3 ? () => this.toggleSound() : null));
+      const actions = [() => this.play(), null, () => openScreen('friends'), () => this.toggleSound()];
+      img.on('pointerdown', () => this.press(img, actions[i]));
       return img;
     });
-    this.icons = ['menu-trophy', 'menu-gift', 'menu-bell'].map(key => {
+    // Rechtsboven: prestaties, deck & kaarten, beloningen (binnenkort), vrienden
+    const iconActions = { 'menu-trophy': () => openScreen('achievements'), 'menu-decks': () => openScreen('deck'),
+      'menu-gift': null, 'menu-bell': () => openScreen('friends') };
+    this.icons = Object.keys(iconActions).map(key => {
       const img = this.add.image(0, 0, key).setInteractive({ useHandCursor: true });
-      img.on('pointerdown', () => this.press(img, null));
+      img.on('pointerdown', () => this.press(img, iconActions[key]));
       return img;
     });
+    // Rood bolletje op de bel bij openstaande vriendverzoeken
+    this.bellDot = this.add.circle(0, 0, 9, 0xd8342a).setStrokeStyle(2, 0xffe6a6).setVisible(false);
+    const onFriends = e => this.bellDot?.setVisible(e.detail.incoming.length > 0);
+    window.addEventListener('lr:friends', onFriends);
+    this.events.once('shutdown', () => window.removeEventListener('lr:friends', onFriends));
     this.toast = this.add.text(0, 0, '', { fontFamily: FONT, fontStyle: 'bold', color: '#fff4d6', stroke: '#2a1d10',
       backgroundColor: '#1b130bcc', padding: { x: 14, y: 8 } }).setOrigin(0.5).setDepth(10).setAlpha(0);
     // Installeren: knop alleen als het kan (Android/desktop) of als uitleg nodig is (iPhone/iPad).
@@ -261,7 +274,10 @@ class Menu extends Phaser.Scene {
     this.buttons.forEach(b => { b.baseScale = bS * k; b.setScale(bS * k).setPosition(w / 2, y + btnH * k / 2); y += (btnH + gap) * k; });
     // Iconen rechtsboven
     const iS = Math.min(h, w) * 0.12 / SCREEN_ART['menu-trophy'].width, iW = SCREEN_ART['menu-trophy'].width * iS;
-    this.icons.forEach((ic, i) => (ic.baseScale = iS, ic).setScale(iS).setPosition(w - iW * (2.6 - i) * 1.08 - iW * 0.3, iW * 0.7));
+    const n = this.icons.length;
+    this.icons.forEach((ic, i) => (ic.baseScale = iS, ic).setScale(iS).setPosition(w - iW * (n - 0.4 - i) * 1.08 - iW * 0.3, iW * 0.7));
+    const bell = this.icons[n - 1];
+    this.bellDot.setPosition(bell.x + iW * 0.36, bell.y - iW * 0.36).setRadius(Math.max(6, iW * 0.11));
     // Personages aan de zijkanten, alleen als er ruimte is
     const side = (w - colW) / 2, show = !portrait && side > w * 0.18;
     const ch = h * 0.62;
@@ -292,10 +308,19 @@ class Battle extends Phaser.Scene {
     playMusic(this, MUSIC.battle[Math.floor(Math.random() * MUSIC.battle.length)]);
     this.vanishing = new Set();      // spionnen die na een overname gewoon verdwijnen
     this.texts = [];
-    this.state = createBattle();
+    // Kaartniveaus en deck uit het account (gasten: alles niveau 1, lokaal deck).
+    // De computer speelt op het gemiddelde niveau van jouw deck, zodat het eerlijk blijft.
+    const levels = account.cardLevels(), deckTypes = account.deckTypes();
+    const aiLevel = Math.round(deckTypes.reduce((a, t) => a + levels[t], 0) / deckTypes.length);
+    this.state = createBattle({ cardLevels: { blue: levels, red: Object.fromEntries(CARDS.map(c => [c.type, aiLevel])) } });
     this.accumulator = 0;
     this.selected = null;          // gekozen vak in de hand (0..3), of null
-    this.hand = createHand(CARDS.length, this.state.rng);
+    this.hand = createHand(account.deckIndices(), this.state.rng);
+    this.stats = { unitsDeployed: 0, towersDestroyed: 0 };
+    this.matchStart = account.signedIn ? account.api('POST', 'match-start.php', {}).catch(() => null) : Promise.resolve(null);
+    const again = () => this.scene.restart(), toMenu = () => this.scene.start('menu');
+    window.addEventListener('lr:again', again); window.addEventListener('lr:to-menu', toMenu);
+    this.events.once('shutdown', () => { window.removeEventListener('lr:again', again); window.removeEventListener('lr:to-menu', toMenu); });
     this.views = new Map();        // eenheid-id -> { sprite, type, lockUntil, flashUntil }
     this.projectiles = [];         // puur visueel
     this.sparks = [];
@@ -372,6 +397,7 @@ class Battle extends Phaser.Scene {
       return;
     }
     playFromHand(this.hand, slot);
+    this.stats.unitsDeployed++;
     this.selected = null;                               // na spelen niets meer geselecteerd
     this.cards[slot].enter = 0;                         // nieuwe kaart schuift het vak in
     this.refreshCardSlot(slot);
@@ -613,6 +639,8 @@ class Battle extends Phaser.Scene {
             this.tweens.add({ targets: view.sprite, alpha: 0, delay: 1300, duration: 700, onComplete: () => view.sprite.destroy() });
           }
         }
+      } else if (e.type === 'destroyed') {
+        if (e.kind === 'tower' && e.side === 'red') this.stats.towersDestroyed++;
       } else if (e.type === 'end') {
         this.showResult(e.winner);
       }
@@ -659,20 +687,23 @@ class Battle extends Phaser.Scene {
     return i >= 0 ? this.structureViews[i].top : 100;
   }
 
-  showResult(winner) {
-    const g = this.add.graphics().setDepth(3000);
-    g.fillStyle(0x1b130b, 0.9).fillRoundedRect(W / 2 - 220, 72, 440, 120, 14);
-    g.lineStyle(3, 0xd9b26a).strokeRoundedRect(W / 2 - 220, 72, 440, 120, 14);
-    this.text(W / 2, 112, winner === 'blue' ? 'VICTORY!' : 'DEFEAT!', 34, winner === 'blue' ? '#c4f3c0' : '#ffc0b5').setOrigin(0.5).setDepth(3001);
-    const again = this.text(W / 2 - 90, 162, 'PLAY AGAIN', 15).setOrigin(0.5).setDepth(3001);
-    const menu = this.text(W / 2 + 90, 162, 'MENU', 15, '#e6d2a6').setOrigin(0.5).setDepth(3001);
-    for (const t of this.texts) t.setResolution(clamp(Math.ceil(this.view.zoom), 1, 4));
+  // Eindscherm (DOM, src/screens.js). Ingelogd: de server bepaalt XP, munten en fragmenten.
+  async showResult(winner) {
+    if (this.resultShown) return;
+    this.resultShown = true;
     this.selected = null;
-    this.time.delayedCall(400, () => {
-      again.setInteractive({ useHandCursor: true }).once('pointerdown', () => this.scene.restart());
-      menu.setInteractive({ useHandCursor: true }).once('pointerdown', () => this.scene.start('menu'));
-    });
+    const detail = { winner, guest: !account.signedIn };
+    const match = await this.matchStart;
+    if (match?.matchId) {
+      try {
+        detail.reward = await account.api('POST', 'match-finish.php', { matchId: match.matchId,
+          result: winner === 'blue' ? 'win' : 'loss', ...this.stats });
+        if (account.profile) account.loadProfile().catch(() => {});
+      } catch (e) { detail.error = e.message; }
+    }
+    window.dispatchEvent(new CustomEvent('lr:result', { detail }));
   }
+
 
   update(_time, delta) {
     const dt = Math.min(delta / 1000, 0.1);

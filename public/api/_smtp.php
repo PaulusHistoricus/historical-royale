@@ -4,7 +4,20 @@ require_once __DIR__ . '/_bootstrap.php';
 
 /** Cloud86 SMTP submission via STARTTLS, no dependencies and no PHP mail() fallback. */
 function smtpSendLoginLink(string $to, string $url): void {
+    smtpSend($to, 'Your Legion Royale sign-in link',
+        "Open this secure link to set or reset your Legion Royale password:\r\n\r\n"
+        . $url . "\r\n\r\n"
+        . "This link expires in 15 minutes and can be used only once.\r\n"
+        . "If you did not request this, you can ignore this message.\r\n");
+}
+
+/** Algemene tekstmail via SMTP. Met 'smtp_test_outbox' in de config (alleen tests) gaat de mail naar een bestand. */
+function smtpSend(string $to, string $subject, string $body): void {
     $c = config();
+    if (!empty($c['smtp_test_outbox'])) {
+        file_put_contents($c['smtp_test_outbox'], json_encode(['to' => $to, 'subject' => $subject, 'body' => $body]) . "\n", FILE_APPEND | LOCK_EX);
+        return;
+    }
     foreach (['smtp_host','smtp_username','smtp_password','smtp_from_email'] as $k) {
         if (empty($c[$k]) || !is_string($c[$k])) throw new RuntimeException('SMTP setting missing: ' . $k);
     }
@@ -52,14 +65,11 @@ function smtpSendLoginLink(string $to, string $url): void {
         $cmd('DATA', [354]);
         $message = "From: Legion Royale <" . $from . ">\r\n"
             . "To: <" . $to . ">\r\n"
-            . "Subject: Your Legion Royale sign-in link\r\n"
+            . "Subject: " . preg_replace('/[\r\n]+/', ' ', $subject) . "\r\n"
             . "MIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n"
             . "Content-Transfer-Encoding: 8bit\r\n"
             . "Auto-Submitted: auto-generated\r\n\r\n"
-            . "Open this secure link to set or reset your Legion Royale password:\r\n\r\n"
-            . $url . "\r\n\r\n"
-            . "This link expires in 15 minutes and can be used only once.\r\n"
-            . "If you did not request this, you can ignore this message.\r\n";
+            . $body;
         // SMTP dot-stuffing; strip accidental CRLF inconsistencies.
         $message = str_replace(["\r\n", "\r"], "\n", $message);
         $message = str_replace("\n", "\r\n", $message);

@@ -34,9 +34,9 @@ assert_missing_parent() {
 }
 
 assert_complete_schema() {
-  assert_value 13 "$(db "$@" -e "SELECT COUNT(*) FROM information_schema.TABLES
+  assert_value 16 "$(db "$@" -e "SELECT COUNT(*) FROM information_schema.TABLES
     WHERE TABLE_SCHEMA=DATABASE() AND ENGINE='InnoDB'")"
-  assert_value 11 "$(db "$@" -e "SELECT COUNT(*) FROM information_schema.REFERENTIAL_CONSTRAINTS
+  assert_value 15 "$(db "$@" -e "SELECT COUNT(*) FROM information_schema.REFERENTIAL_CONSTRAINTS
     WHERE CONSTRAINT_SCHEMA=DATABASE()")"
   assert_value 1 "$(db "$@" -e "SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE
     WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='email_identities'
@@ -79,5 +79,23 @@ assert_value 1 "$(db "$@" lr_partial -e "SELECT COUNT(*) FROM players p
 
 db "$@" lr_signed -e 'CREATE TABLE players (id BIGINT NOT NULL PRIMARY KEY) ENGINE=InnoDB'
 assert_missing_parent "$@" lr_signed
+
+# Migration 002 on a database that only has the pre-002 schema, with existing data; twice.
+migration2=database/migrations/002_profile_cards_friends.sql
+diff -u <(sed -n '/^-- === 002/,/^-- Email login and /p' "$schema" | sed '$d' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}') \
+        <(sed -n '/^-- === 002/,$p' "$migration2" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}')
+db "$@" -e 'CREATE DATABASE lr_upgrade'
+sed '/^-- === 002/,/^-- Email login and /{/^-- Email login and /!d}' "$schema" | db "$@" lr_upgrade
+db "$@" lr_upgrade -e "INSERT INTO players (id,public_id,display_name) VALUES (7,'12345678-1234-1234-1234-123456789abd','Old player');
+  INSERT INTO player_progress (player_id,xp,wins) VALUES (7,250,3)"
+db "$@" lr_upgrade < "$migration2"
+db "$@" lr_upgrade < "$migration2"
+assert_complete_schema "$@" lr_upgrade
+assert_value 1 "$(db "$@" lr_upgrade -e "SELECT COUNT(*) FROM players p JOIN player_progress pr ON pr.player_id=p.id
+  WHERE p.id=7 AND p.display_name='Old player' AND pr.xp=250 AND pr.wins=3 AND pr.matches_played=0 AND p.avatar_key IS NULL")"
+
+db "$@" -e 'CREATE DATABASE lr_signed2'
+db "$@" lr_signed2 -e 'CREATE TABLE players (id BIGINT NOT NULL PRIMARY KEY) ENGINE=InnoDB'
+if db "$@" lr_signed2 < "$migration2" 2>/dev/null; then printf '002 accepted an incompatible players table\n' >&2; exit 1; fi
 
 printf 'MariaDB install, migration, retry and foreign key checks passed.\n'

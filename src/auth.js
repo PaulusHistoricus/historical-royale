@@ -6,7 +6,8 @@ root.id = 'auth-ui';
 root.innerHTML = `
   <div class="lr-profile" id="lr-profile" hidden>
     <img id="lr-avatar" alt="" hidden>
-    <span class="lr-profile-name" id="lr-profile-name"></span>
+    <span class="lr-profile-text"><span class="lr-profile-name" id="lr-profile-name"></span>
+      <span class="lr-profile-xp" id="lr-profile-xp" hidden><i id="lr-profile-xpfill"></i></span></span>
     <button id="lr-profile-button" type="button">Sign in</button>
   </div>
   <section class="lr-auth-dialog" id="lr-auth-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="lr-auth-title">
@@ -117,19 +118,25 @@ function showError(message) {
   error.textContent = message; error.hidden = !message;
 }
 function render() {
+  window.lrSession = session;
+  window.dispatchEvent(new Event('lr:session'));
   const profile = byId('lr-profile');
   showEmailFields();
   profile.hidden = !onMenu;
   if (session?.authenticated) {
-    byId('lr-profile-name').textContent =
-      session.player.name + ' · Lv ' + session.player.level + ' · ' + session.player.coins + ' coins';
-    byId('lr-profile-button').textContent = 'Sign out';
+    const pl = session.player;
+    byId('lr-profile-name').textContent = pl.name + ' · Lv ' + pl.level + ' · ' + pl.coins + ' 🪙';
+    byId('lr-profile-xp').hidden = !pl.xpForNext;
+    byId('lr-profile-xpfill').style.width = (pl.xpForNext ? 100 * pl.xpInLevel / pl.xpForNext : 100) + '%';
+    byId('lr-profile-button').textContent = 'Profile';
     const img = byId('lr-avatar');
-    img.hidden = !session.player.avatar;
-    if (session.player.avatar) img.src = session.player.avatar;
+    const src = pl.avatarKey ? import.meta.env.BASE_URL + 'assets/avatars/' + pl.avatarKey + '.webp' : pl.avatar;
+    img.hidden = !src;
+    if (src) img.src = src;
     dialog.hidden = true;
   } else {
     byId('lr-profile-name').textContent = 'Guest';
+    byId('lr-profile-xp').hidden = true;
     byId('lr-avatar').hidden = true;
     byId('lr-profile-button').textContent = 'Sign in';
     dialog.hidden = !(onMenu && hasChecked && (!guest || emailMode === 'set'));
@@ -220,7 +227,7 @@ byId('lr-email-set-form').addEventListener('submit', async event => {
   finally { authBusy = false; button.disabled = false; }
 });
 byId('lr-auth-guest').addEventListener('click', () => { guest = true; dialog.hidden = true; render(); });
-byId('lr-profile-button').addEventListener('click', async () => {
+async function signOut() {
   if (session?.authenticated) {
     try {
       const res = await fetch('/api/logout.php', { method: 'POST', credentials: 'same-origin',
@@ -229,9 +236,14 @@ byId('lr-profile-button').addEventListener('click', async () => {
       session = { authenticated: false }; guest = true;
       render();
     } catch { showError('Unable to sign out. Please try again.'); dialog.hidden = false; }
-  } else {
-    guest = false; render();
   }
+}
+window.lrSignOut = signOut;
+window.addEventListener('lr:player', render);
+byId('lr-avatar').addEventListener('click', () => { if (session?.authenticated) window.dispatchEvent(new CustomEvent('lr:open', { detail: 'profile' })); });
+byId('lr-profile-button').addEventListener('click', () => {
+  if (session?.authenticated) window.dispatchEvent(new CustomEvent('lr:open', { detail: 'profile' }));
+  else { guest = false; render(); }
 });
 window.addEventListener('lr:menu', () => { onMenu = true; render(); });
 window.addEventListener('lr:battle', () => { onMenu = false; dialog.hidden = true; render(); });

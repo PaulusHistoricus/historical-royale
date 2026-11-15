@@ -128,17 +128,26 @@ function sessionPlayer(): ?array {
     $id = $_SESSION['player_id'] ?? null;
     if (!is_int($id) || $id < 1) return null;
     $statement = db()->prepare(
-      'SELECT p.id, p.public_id, p.display_name, p.avatar_url, pr.level, pr.xp, pr.wins, pr.losses, w.coins
+      'SELECT p.*, pr.level, pr.xp, pr.wins, pr.losses, w.coins
        FROM players p JOIN player_progress pr ON pr.player_id=p.id JOIN wallets w ON w.player_id=p.id
        WHERE p.id = ? LIMIT 1'
     );
     $statement->execute([$id]);
-    return $statement->fetch() ?: null;
+    $row = $statement->fetch() ?: null;
+    if ($row) {   // online-status voor vrienden; hooguit eens per minuut schrijven
+        try { db()->prepare('UPDATE players SET last_seen_at=UTC_TIMESTAMP() WHERE id=? AND (last_seen_at IS NULL OR last_seen_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 60 SECOND))')->execute([$id]); }
+        catch (Throwable $e) { /* kolom ontbreekt nog (migratie 002 niet gedraaid): niet fataal */ }
+    }
+    return $row;
 }
 function publicPlayer(array $p): array {
+    // Niveau altijd uit XP afgeleid (zelfde formule als _game.php levelInfo).
+    $xp = (int)$p['xp']; $level = 1; $rest = $xp;
+    while ($level < 50 && $rest >= 100 + 50 * ($level - 1)) { $rest -= 100 + 50 * ($level - 1); $level++; }
     return [
         'id' => $p['public_id'], 'name' => $p['display_name'], 'avatar' => $p['avatar_url'],
-        'level' => (int)$p['level'], 'xp' => (int)$p['xp'],
+        'avatarKey' => $p['avatar_key'] ?? null,
+        'level' => $level, 'xp' => $xp, 'xpInLevel' => $rest, 'xpForNext' => $level >= 50 ? 0 : 100 + 50 * ($level - 1),
         'wins' => (int)$p['wins'], 'losses' => (int)$p['losses'], 'coins' => (int)$p['coins'],
     ];
 }

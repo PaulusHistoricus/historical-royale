@@ -12,11 +12,13 @@ function shuffle(items, rng) {
   return result;
 }
 
-export function createHand(cardCount, rng = Math.random, size = HAND_SIZE) {
-  if (!Number.isInteger(cardCount) || cardCount < size || size < 1) {
+export function createHand(cards, rng = Math.random, size = HAND_SIZE) {
+  // cards: aantal kaarten (0..n-1) of een lijst kaartindexen (het deck).
+  const pool = Array.isArray(cards) ? [...cards] : Array.from({ length: cards }, (_, i) => i);
+  if (!pool.every(Number.isInteger) || pool.length < size || size < 1) {
     throw new RangeError('Hand requires at least as many cards as slots');
   }
-  const deck = shuffle(Array.from({ length: cardCount }, (_, i) => i), rng);
+  const deck = shuffle(pool, rng);
   return { slots: deck.splice(0, size), drawPile: deck, discard: [], rng };
 }
 

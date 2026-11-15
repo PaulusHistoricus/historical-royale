@@ -77,5 +77,14 @@ Een nieuwe kaart is één regel in `CARDS` (met `radius` en rand-tot-rand `range
 - `private/legionroyale.example.php`: Placeholder configuration ONLY. Real `legionroyale.php` must live outside the public document root on Cloud86 and must NEVER be added to GitHub.
 - `docs/auth-deployment.md`: OAuth and Plesk setup instructions.
 - `npm test && npm run build` and PHP `php -l` must pass before merging.
-- Authentication currently does **not** imply realtime multiplayer, and account-based gameplay progression is not yet wired to the simulation. Do not add client-authoritative rewards or match results.
+- Authentication does **not** imply realtime multiplayer (that is phase 4, see below).
+
+## Profile, progression, decks and friends (v0.16.0)
+
+- Schema: `database/migrations/002_profile_cards_friends.sql` (same block also in `schema.sql`; `tests/database-schema.sh` checks they are identical). Adds avatar/friend code/last_seen to `players`, extra stats to `player_progress`, `player_cards`, `email_change_tokens`, `friendships`.
+- Game rules live in TWO places that must match: `public/api/_game.php` (authoritative) and `src/progression.js` (display + sim). `tests/progression.test.js` checks they agree. `DECK_SIZE = 8` (4 in hand, 4 waiting), 12 card types, card levels 1–6 (+10% hp/damage per level via `leveledCard` in `src/sim/battle.js`), player level 1–50, 17 achievements, 20 avatars (`public/assets/avatars/a01..a20.webp`, built by `tools/art/avatars.py`).
+- Endpoints: `profile.php`, `profile-update.php`, `email-change-request.php`/`-confirm.php`, `match-start.php`/`match-finish.php`, `card-upgrade.php`, `deck-save.php`, `friends.php`, `friend-request.php`, `friend-respond.php`. Integration tests: `tests/api/api.test.mjs` (needs MariaDB + PHP; runs in the Account database workflow).
+- UI: `src/screens.js`/`screens.css` are DOM overlays. Events: `lr:open` (detail `profile|achievements|deck|friends`), `lr:session`, `lr:player`, `lr:friends`, `lr:result`, `lr:again`, `lr:to-menu`. `src/account.js` is the API client (`window.lrAccount`).
+- **Trust model (deliberate, known limitation):** AI matches run in the browser, so their results are client-reported. Mitigations on the server: a single-use match token from `match-start.php`, minimum 30 s / maximum 1 h duration, rate limit, capped tower/unit counts, server-side XP/coins/drops. Rewards are small. Do not raise rewards or add tradeable value on top of this. Ranked PvP (phase 4) must NOT use this path: it must be server-verifiable (deterministic lockstep replay of the seed + inputs through `src/sim`).
+- Phase 4 (not built): friend challenge + ranking via polling lockstep (like Relic Slide's class mode).
 - Guest play must remain usable if Google credentials are not yet set. Never put passwords, OAuth secrets, DB connection info, or privileged database operations into browser JavaScript.
