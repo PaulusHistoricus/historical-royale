@@ -65,3 +65,15 @@ Een nieuwe kaart is één regel in `CARDS` (met `radius` en rand-tot-rand `range
 - `npm test` — alle gevechtstests, inclusief 25 volledige wedstrijden.
 - Open de game met `?debug=1` voor een live overzicht per eenheid (positie, HP, state, doelwit, gap, cooldown). In de console staat dan `__HR__.state`.
 - De kop in het spel toont `v<versie> (<commit>)`. Vergelijk de commit met GitHub om te zien welke build je speelt. Test nooit een fix vóórdat die commit in de kop staat: een deploy duurt ±1 minuut.
+
+
+## Account/login (added after v0.12.1)
+
+- `src/auth.js` + `src/auth.css`: Login overlay and profile display, English player-facing text. Imported by `src/main.js`; scene lifecycle emits `lr:menu` / `lr:battle`.
+- `public/api/*.php`: PHP 8.1+ same-origin login backend, Google authorization code + PKCE + state + nonce, local JWT signature validation, secure HttpOnly sessions and MariaDB account initialization. These are copied into the Cloud86 Vite dist directory.
+- `database/schema.sql`: MariaDB schema for players, linked Google identities, progress, wallets and future economy, achievements and matches.
+- `private/legionroyale.example.php`: Placeholder configuration ONLY. Real `legionroyale.php` must live outside the public document root on Cloud86 and must NEVER be added to GitHub.
+- `docs/auth-deployment.md`: OAuth and Plesk setup instructions.
+- `npm test && npm run build` and PHP `php -l` must pass before merging.
+- Authentication currently does **not** imply realtime multiplayer, and account-based gameplay progression is not yet wired to the simulation. Do not add client-authoritative rewards or match results.
+- Guest play must remain usable if Google credentials are not yet set. Never put passwords, OAuth secrets, DB connection info, or privileged database operations into browser JavaScript.
