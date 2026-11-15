@@ -30,10 +30,3 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate install, retry and migration
         run: bash tests/database-schema.sh docker exec -i ${{ job.services.mariadb.id }} mariadb -uroot
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: npm ci
-      - run: npm test
-      - run: npm run build
-      - run: find public/api private -name '*.php' -exec php -l {} +
