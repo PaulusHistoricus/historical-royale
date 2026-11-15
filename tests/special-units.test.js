@@ -164,3 +164,14 @@ test('Healer only heals own units and turns towards the ally she heals', () => {
   assert.ok(heals.length >= 1);
   assert.ok(heals.every(e => e.targetId === ally.id));
 });
+
+test('Healer never heals units in the other lane', () => {
+  const s = createBattle({ ai: false });
+  const healer = addUnit(s, 'blue', 0, idx('healer'), 400);
+  const otherLane = addUnit(s, 'blue', 1, idx('melee'), 420); otherLane.hp = 50;
+  const sameLane = addUnit(s, 'blue', 0, idx('melee'), 430); sameLane.hp = 50;
+  const heals = run(s, 3).filter(e => e.type === 'heal');
+  assert.ok(heals.length >= 1);
+  assert.ok(heals.every(e => e.targetId === sameLane.id));
+  assert.ok(otherLane.hp <= 50, 'andere baan krijgt er nooit levenspunten bij');
+});
