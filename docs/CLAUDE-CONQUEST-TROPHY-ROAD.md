@@ -99,6 +99,67 @@ The repo's source art, login/menus and current gameplay remain authoritative.
   but label unavailable interactions honestly.
 - Keep seasonal competitive ranking separate from permanent Trophy Road.
 
+## MANDATORY missing core gameplay rule — Tower destruction shifts deployment territory
+
+**This was explicitly agreed with Paul previously and is currently missing from
+the live simulation. It is NOT merely a map graphic. Claude: include this in the
+gameplay backlog as a dedicated implementation PR with tests, and preserve
+compatibility with single-player and future server-authoritative PvP.**
+
+- There are **two lanes**, each with a blue frontline tower and red frontline tower.
+- At battle start, each side may deploy only in its normal side-specific zone.
+- **When the BLUE tower in lane N is destroyed**, BLUE loses **half of its original
+  deployment-zone width on that lane**. RED gains the surrendered territory on
+  **the same lane**. The other lane must remain unchanged.
+- **When the RED tower in lane N is destroyed**, the reverse happens: RED loses
+  half its original deployment zone; BLUE takes that territory in that lane.
+- Changed zones persist for the remainder of the match. There is no automatic
+  restoration, even if the defender keeps its castle.
+- Both towers may fall in different lanes; zone state is calculated independently
+  for each lane. Document the rule if both towers in one lane could be destroyed
+  in an unexpected order; do not allow overlapping deployment zones.
+- The deployment overlay/boundary on the battlefield must **visibly move** when
+  the tower collapses. Blue/red territory colors should correspond to their owner.
+- **Actual placement and AI deployment must use the new lane-specific zone**,
+  not merely a UI indicator. Client pointer hitboxes and the underlying
+  deterministic simulation must agree.
+- Mobile landscape touch deploy, cards and special units (e.g. P-51) must keep
+  working; a special strike with no spawn coordinate should not be blocked.
+- Add tests that destroy each side's tower separately, verify the reduced/enlarged
+  zones only for the affected lane, that deployments clamp/reject consistently,
+  and that energy is not charged for an invalid deployment.
+
+**Existing code to inspect:**
+
+- `src/sim/config.js`: currently `DEPLOY_ZONE.blue = { min:268, max:465 }`,
+  `DEPLOY_ZONE.red = { min:495, max:692 }`, two lanes at y=123 and y=221.
+- `src/sim/battle.js`: `deploy()` currently uses `DEPLOY_ZONE[side]` without
+  regard to lane or destroyed structures; `step()` detects destroyed towers.
+- `src/main.js`: find the placement overlay / pointer-to-world calculations
+  so the visual territory matches the simulation.
+- `stepAI()` currently picks spawns from static `AI.spawnMin/max` and must
+  instead use the dynamic red-lane zone.
+
+**Suggested deterministic geometry (confirm via tests/visual design):**
+
+At start, BLUE = [268,465], RED = [495,692].
+If blue lane tower falls: BLUE max = 366.5 (half blue width), RED min = 366.5
+(red may deploy into the captured center and the surrendered blue half).
+If red lane tower falls: RED min = 593.5 (half red width), BLUE max = 593.5.
+These values are examples based on the **current** world coordinates: derive
+them from config, not hardcoded integers in multiple files. Start with a neutral
+30-unit no-deploy gap; after a tower falls the advancing frontline closes
+that gap on the affected lane. If collision/edge cases require a small buffer,
+keep the rule consistent and explain it.
+
+**Delivery request:** Claude should explicitly track this missing rule, implement
+it as a separate core-simulation PR (not mix it silently into the cosmetic
+Trophy Road screen), and add a small English tutorial message such as
+`Tower destroyed — deployment zone expanded!` and its defender counterpart.
+No new graphics are essential unless the current colored placement overlay
+cannot visually communicate the new boundary; otherwise write an exact art
+request for ChatGPT in `docs/art-requests/conquest-trophy-road.md`.
+
 ## Shared design + technical requirements
 
 - Phaser/Vite assets; match existing game graphic language and references.
