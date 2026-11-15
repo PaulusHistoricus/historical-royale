@@ -37,7 +37,7 @@ const art = file => ART + file + '?v=' + BUILD;
 const AUDIO = import.meta.env.BASE_URL + 'assets/audio/';
 const SFX_FILES = ['sword-1', 'sword-2', 'sword-3', 'axe', 'death-male-1', 'death-male-2', 'death-collapse',
   'death-female-1', 'death-female-2', 'death-female-3', 'musket', 'machine-gun', 'explosion', 'heal', 'magic-wind',
-  'small-explosion', 'fire', 'kiss'];
+  'small-explosion', 'fire', 'kiss', 'tower-collapse'];
 const MUSIC = { menu: 'music-2', battle: ['music-1', 'music-3'] };
 const SFX = {   // groep -> [bestanden, volume, minimale tijd tussen twee keer (ms)]
   sword: [['sword-1', 'sword-2', 'sword-3'], 0.45, 70],
@@ -51,8 +51,27 @@ const SFX = {   // groep -> [bestanden, volume, minimale tijd tussen twee keer (
   magic: [['magic-wind'], 0.4, 400],
   pot: [['small-explosion'], 0.5, 90],
   kiss: [['kiss'], 0.6, 200],
+  collapse: [['tower-collapse'], 0.7, 250],
 };
 const FEMALE = new Set(['healer', 'spy']);
+
+// Levend vuur bovenop de geschilderde schadestadia: [x, y, grootte, soort] in framepixels
+// (tower 128x180, castle 333x404), per stadium 0..4. Soort: vuur (standaard), 'torch' of 'smoke'.
+const FIRES = {
+  tower: [
+    [[38, 20, 0.45, 'torch'], [90, 20, 0.45, 'torch']],
+    [[37, 22, 0.45, 'torch'], [89, 22, 0.45, 'torch']],
+    [[33, 24, 0.45, 'torch'], [56, 44, 0.55], [62, 40, 0.6, 'smoke']],
+    [[40, 66, 1.3], [58, 58, 0.6], [60, 40, 1.1, 'smoke']],
+    [[60, 106, 0.8], [66, 98, 1, 'smoke']],
+  ],
+  castle: [
+    [], [],
+    [[240, 222, 0.5], [236, 205, 0.7, 'smoke']],
+    [[140, 170, 2.0], [110, 190, 0.9], [175, 185, 0.9], [150, 120, 1.8, 'smoke']],
+    [[100, 238, 1.2], [100, 200, 1.5, 'smoke'], [250, 330, 0.5]],
+  ],
+};
 const lastPlayed = {};
 function sfx(scene, group, volume = 1) {
   const [files, vol, gap] = SFX[group], now = performance.now();
@@ -93,7 +112,7 @@ const MOUNTED = new Set(['cavalry', 'horse_archer']);
 const MELEE_KINDS = new Set(['melee', 'cavalry', 'berserker', 'samurai', 'spy']);
 const CARD_LABEL = { melee: 'Legionary', archer: 'Archer', cannon: 'Cannon', cavalry: 'Cavalry',
   berserker: 'Berserker', horse_archer: 'Horse Archer', musket: 'Musketeer',
-  healer: 'Healer', samurai: 'Samurai', spy: 'Spy', firethrower: 'Fire Thrower', p51: 'P-51 Mustang' };
+  healer: 'Priestess', samurai: 'Samurai', spy: 'Spy', firethrower: 'Fire Thrower', p51: 'P-51 Mustang' };
 
 const unitTexture = (type, side) => {
   const list = UNIT_ART[type].textures;
@@ -338,6 +357,9 @@ class Battle extends Phaser.Scene {
       return { sprite, foot, top: foot - def.frameHeight / TEX + 6, flashUntil: 0 };
     });
 
+    this.smoke = this.add.graphics().setDepth(996);      // rook van brandende gebouwen
+    this.flames = this.add.graphics().setDepth(997).setBlendMode(Phaser.BlendModes.ADD);   // gloed, vlammen, vonken
+    this.fireParts = [];
     this.ground = this.add.graphics().setDepth(1);      // teamcirkels onder eenheden
     this.fx = this.add.graphics().setDepth(1000);       // projectielen, vonken
     this.bars = this.add.graphics().setDepth(1010);     // levensbalken
@@ -641,6 +663,10 @@ class Battle extends Phaser.Scene {
         }
       } else if (e.type === 'destroyed') {
         if (e.kind === 'tower' && e.side === 'red') this.stats.towersDestroyed++;
+        sfx(this, 'collapse');
+        this.cameras.main.shake(380, 0.006);
+        const i = this.state.structures.findIndex(s => s.id === e.id);
+        if (i >= 0) this.collapseBurst(this.state.structures[i], this.structureViews[i]);
       } else if (e.type === 'end') {
         this.showResult(e.winner);
       }
@@ -732,6 +758,7 @@ class Battle extends Phaser.Scene {
     this.syncUnitViews();
     this.drawUnits();
     this.drawStructures();
+    this.drawFires(dt);
     this.drawEffects(dt);
     this.drawAirstrikes();
     this.drawHud(dt);
@@ -750,7 +777,8 @@ class Battle extends Phaser.Scene {
 
   // Brandgeluid zolang er eenheden branden, harder naarmate er meer branden.
   updateFireSound() {
-    const burning = this.state.units.filter(u => u.burnRemaining > 0).length;
+    const burning = this.state.units.filter(u => u.burnRemaining > 0).length
+      + 0.6 * this.state.structures.filter(s => s.hp > 0 && s.hp / s.max <= 0.25).length;
     if (burning && !this.paused && !this.state.ended) {
       if (!this.fireLoop) { this.fireLoop = this.sound.add('fire', { loop: true, volume: 0 }); this.fireLoop.play(); }
       this.fireLoop.setVolume(Math.min(0.5, 0.22 + burning * 0.07));
@@ -830,6 +858,67 @@ class Battle extends Phaser.Scene {
       b.fillStyle(0x1d1a16, 0.85).fillRect(s.x - w / 2 - 1, y - 1, w + 2, 7);
       b.fillStyle(TEAM[s.side]).fillRect(s.x - w / 2, y, w * ratio, 5);
     });
+  }
+
+  // Knetterend vuur, vonken en rook op beschadigde gebouwen (puur weergave).
+  drawFires(dt) {
+    const fl = this.flames, sm = this.smoke, t = this.time.now / 1000;
+    fl.clear(); sm.clear();
+    this.state.structures.forEach((s, i) => {
+      const def = WORLD_ART[s.kind], v = this.structureViews[i];
+      const points = FIRES[s.kind][v.sprite.frame.name] ?? [];
+      points.forEach(([fx, fy, size, kind], j) => {
+        const x = s.x + (fx - def.frameWidth / 2) / TEX, y = v.foot + (fy - def.frameHeight + 2) / TEX;
+        const seed = i * 7 + j * 3;
+        if (kind === 'smoke') {
+          if (Math.random() < dt * 4 * size) this.fireParts.push({ kind: 'smoke', x: x + (Math.random() - 0.5) * 6 * size, y,
+            vx: 4 + Math.random() * 5, vy: -14 - Math.random() * 8, life: 0, max: 2.2 + Math.random(), r: 3 * size });
+          return;
+        }
+        // flakkerende gloed
+        const flick = 0.75 + 0.25 * Math.sin(t * 17 + seed) * Math.sin(t * 7.3 + seed * 2) + Math.random() * 0.12;
+        fl.fillStyle(0xff7a1a, 0.13 * flick).fillCircle(x, y - 2 * size, 16 * size * flick);
+        fl.fillStyle(0xffb347, 0.2 * flick).fillCircle(x, y - 3 * size, 8 * size * flick);
+        const torch = kind === 'torch';
+        if (Math.random() < dt * (torch ? 10 : 26) * size) this.fireParts.push({ kind: 'flame', x: x + (Math.random() - 0.5) * 9 * size, y,
+          vx: (Math.random() - 0.5) * 6, vy: -(18 + Math.random() * 22) * Math.max(0.6, size), life: 0, max: 0.35 + Math.random() * 0.35, r: (torch ? 2.6 : 4.2) * size });
+        if (Math.random() < dt * (torch ? 0.8 : 6) * size) this.fireParts.push({ kind: 'ember', x: x + (Math.random() - 0.5) * 10 * size, y: y - 4 * size,
+          vx: (Math.random() - 0.5) * 22, vy: -30 - Math.random() * 40, life: 0, max: 0.7 + Math.random() * 0.9, r: 0.7 + Math.random() * 0.6 });
+      });
+    });
+    if (this.fireParts.length > 600) this.fireParts.splice(0, this.fireParts.length - 600);
+    this.fireParts = this.fireParts.filter(p => {
+      p.life += dt;
+      if (p.life >= p.max) return false;
+      const k = p.life / p.max;
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      if (p.kind === 'smoke') {
+        p.vx += 2 * dt;
+        sm.fillStyle(0x2f2a27, 0.32 * (1 - k) * Math.min(1, k * 5)).fillCircle(p.x, p.y, p.r * (1 + 2.4 * k));
+      } else if (p.kind === 'ember') {
+        p.vx += Math.sin(p.life * 9 + p.r * 10) * 40 * dt; p.vy += 12 * dt;
+        fl.fillStyle(k < 0.5 ? 0xffe08a : 0xff8a3a, 1 - k).fillCircle(p.x, p.y, p.r);
+      } else if (p.kind === 'debris') {
+        p.vy += 260 * dt;
+        sm.fillStyle(p.color, 1 - k * k).fillRect(p.x - p.r, p.y - p.r, p.r * 2, p.r * 2);
+      } else {   // vlam: geel -> oranje -> rood, krimpt en stijgt
+        const color = k < 0.3 ? 0xfff0a0 : k < 0.6 ? 0xffa030 : 0xe0401a;
+        fl.fillStyle(color, 0.55 * (1 - k)).fillCircle(p.x, p.y, p.r * (1 - 0.7 * k));
+      }
+      return true;
+    });
+  }
+
+  // Instorten: stenen en stof vliegen weg.
+  collapseBurst(s, v) {
+    const top = v.top, h = v.foot - top;
+    for (let n = 0; n < 34; n++) this.fireParts.push({ kind: 'debris', x: s.x + (Math.random() - 0.5) * (s.kind === 'castle' ? 90 : 40),
+      y: top + Math.random() * h * 0.7, vx: (Math.random() - 0.5) * 160, vy: -60 - Math.random() * 120, life: 0, max: 0.8 + Math.random() * 0.5,
+      r: 1 + Math.random() * 2.2, color: [0xb9a98e, 0x8d7e68, 0x6f604c][n % 3] });
+    for (let n = 0; n < 14; n++) this.fireParts.push({ kind: 'smoke', x: s.x + (Math.random() - 0.5) * 50, y: v.foot - Math.random() * h * 0.5,
+      vx: (Math.random() - 0.5) * 30, vy: -10 - Math.random() * 20, life: 0, max: 1.6 + Math.random(), r: 6 + Math.random() * 6 });
+    for (let n = 0; n < 24; n++) this.fireParts.push({ kind: 'ember', x: s.x + (Math.random() - 0.5) * 40, y: top + h * 0.4,
+      vx: (Math.random() - 0.5) * 120, vy: -50 - Math.random() * 90, life: 0, max: 0.6 + Math.random() * 0.8, r: 0.8 + Math.random() * 0.8 });
   }
 
   drawEffects(dt) {
@@ -1018,7 +1107,9 @@ const initial = stageSize();
 const game = new Phaser.Game({
   type: Phaser.AUTO, parent: stage, width: initial.w, height: initial.h,
   backgroundColor: '#15100a',
-  scale: { mode: Phaser.Scale.NONE, zoom: 1 / initial.ratio },
+  // Volledig scherm op de hele pagina, niet alleen het canvas: anders vallen de DOM-schermen
+  // (overwinning, profiel, decks, inloggen) erbuiten en zie je ze niet.
+  scale: { mode: Phaser.Scale.NONE, zoom: 1 / initial.ratio, fullscreenTarget: document.documentElement },
   render: { antialias: true, roundPixels: false },
   scene: [Boot, Menu, Battle],
 });

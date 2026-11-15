@@ -11,7 +11,7 @@ const BASE = import.meta.env.BASE_URL;
 const avatarUrl = key => `${BASE}assets/avatars/${key}.webp?v=${BUILD}`;
 const cardOf = type => CARDS.find(c => c.type === type);
 const NAMES = { melee: 'Legionary', archer: 'Archer', cannon: 'Cannon', cavalry: 'Cavalry', berserker: 'Berserker',
-  horse_archer: 'Horse Archer', musket: 'Musketeer', healer: 'Healer', samurai: 'Samurai', spy: 'Spy',
+  horse_archer: 'Horse Archer', musket: 'Musketeer', healer: 'Priestess', samurai: 'Samurai', spy: 'Spy',
   firethrower: 'Fire Thrower', p51: 'P-51 Mustang' };
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -235,24 +235,36 @@ window.addEventListener('lr:session', () => {
 });
 
 // ---------- Beloningen na een gevecht ----------
+const artUrl = name => `${BASE}assets/art/${name}.webp?v=${BUILD}`;
+// Beloningskaart: ons kaartportret in de goudlijst uit result-card.webp.
+function rewardCard(type, text) {
+  return `<div class="lr-rcard"><span class="lr-rcard-art">${cardImg(type, 150)}</span>
+    <img src="${artUrl('result-card')}" alt=""><b>${esc(NAMES[type])}</b><i>${text}</i></div>`;
+}
 function showResult({ winner, reward, error, guest }) {
   const win = winner === 'blue';
   const frags = Object.entries(reward?.fragments ?? {});
   open('result', `
-    <h2 class="lr-result ${win ? 'win' : 'loss'}">${win ? 'VICTORY!' : 'DEFEAT'}</h2>
+    <div class="lr-banner ${win ? 'win' : 'loss'}">${win ? `<img src="${artUrl('result-banner-victory')}" alt="Victory">`
+      : `<img src="${artUrl('result-banner-blank')}" alt=""><span>DEFEAT</span>`}</div>
     ${reward ? `
-      <div class="lr-gains"><span>+${reward.xpGained} XP</span><span>+${reward.coinsGained} 🪙</span></div>
+      ${frags.length ? `<div class="lr-ribbon"><img src="${artUrl('result-ribbon')}" alt="Battle rewards"></div>
+        <div class="lr-rcards">${frags.map(([t, n]) => rewardCard(t, `+${n}`)).join('')}</div>` : ''}
+      <div class="lr-coinbox"><img src="${artUrl('result-coins')}" alt="">
+        <div><small>COINS</small><b>+${reward.coinsGained}</b><small>+${reward.xpGained} XP</small></div></div>
       <div class="lr-level"><b>Level ${reward.level}</b><span class="lr-xpbar"><i style="width:${reward.xpForNext ? Math.round(100 * reward.xpInLevel / reward.xpForNext) : 100}%"></i></span>
         <small>${reward.xpForNext ? `${reward.xpInLevel} / ${reward.xpForNext} XP` : 'Max level'}</small></div>
       ${reward.level > reward.levelBefore ? `<p class="lr-levelup">⭐ Level up! You reached level ${reward.level} (+${100 * (reward.level - reward.levelBefore)} 🪙)</p>` : ''}
-      ${frags.length ? `<h3>Card fragments</h3><div class="lr-frags">${frags.map(([t, n]) => `<div>${cardImg(t, 84)}<b>+${n}</b></div>`).join('')}</div>` : ''}
       ${(reward.achievements ?? []).map(a => `<p class="lr-ach-new">🏆 <b>${esc(a.title)}</b> — ${esc(a.description)}</p>`).join('')}`
-    : `<p class="lr-muted">${guest ? 'Sign in to earn XP, coins and card fragments.' : esc(error || 'No rewards for this battle.')}</p>`}
-    <div class="lr-result-actions"><button class="lr-btn gold" id="lr-again">Play again</button><button class="lr-btn" id="lr-menu">Menu</button></div>`, el => {
+    : `<p class="lr-muted lr-noreward">${guest ? 'Sign in to earn XP, coins and card fragments.' : esc(error || 'No rewards for this battle.')}</p>`}
+    <div class="lr-result-actions">
+      <button class="lr-bigbtn" id="lr-again"><img src="${artUrl('result-button')}" alt=""><span>${win ? 'Play again' : 'Try again'}</span></button>
+      <button class="lr-bigbtn small" id="lr-menu"><img src="${artUrl('result-button')}" alt=""><span>Menu</span></button></div>`, el => {
     el.querySelector('.lr-close').remove();
     el.querySelector('#lr-again').onclick = () => { close(); window.dispatchEvent(new Event('lr:again')); };
     el.querySelector('#lr-menu').onclick = () => { close(); window.dispatchEvent(new Event('lr:to-menu')); };
   });
+  root.querySelector('.lr-screen').style.setProperty('--result-bg', `url(${artUrl('result-bg')})`);
 }
 
 // ---------- E-mail-wijzigingslink (#email_change_token=...) ----------
