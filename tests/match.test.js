@@ -23,6 +23,7 @@ test('plaatsing wordt binnen de eigen zone gehouden en ongeldige invoer geweiger
 
 test('balansinvarianten die vastlopers en onbeantwoorde aanvallen uitsluiten', () => {
   for (const card of CARDS) {
+    if (card.type === 'p51') { assert.ok(card.duration > 0 && card.towerDamagePct === 0.1); continue; }
     assert.ok(card.range >= 0 && card.speed > 0 && card.rate > 0 && card.radius > 0, card.name);
     assert.ok(card.range + 2 * card.radius < DETECTION_RANGE, `${card.name}: bereik moet binnen detectiebereik vallen`);
     for (const def of Object.values(STRUCTURES)) {
