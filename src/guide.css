@@ -1,0 +1,68 @@
+/* De gidsen: rondleiding en uitleg met zes personages (zie guide.js). Opzet overgenomen van Relic Slide,
+   aangepast aan een liggend scherm: het personage staat naast een brede ballon onder- of bovenin. */
+.gids { position: fixed; inset: 0; z-index: 9500; pointer-events: none; font-family: Georgia, 'Times New Roman', serif; }
+.gids-dim { position: fixed; inset: 0; background: rgba(10, 6, 2, .66); pointer-events: auto; opacity: 0; transition: opacity .25s; }
+.gids.on .gids-dim { opacity: 1; }
+.gids.has-target .gids-dim { background: transparent; }
+/* gouden lijst rond het onderdeel dat wordt uitgelegd; de schaduw maakt de rest donkerder */
+.gids-ring { position: fixed; left: 0; top: 0; width: 0; height: 0; border-radius: 14px; border: 3px solid #f2c14e;
+  box-shadow: 0 0 0 9999px rgba(10, 6, 2, .66), 0 0 0 1px #5a3510, 0 0 22px 4px rgba(255, 203, 90, .75), inset 0 0 14px rgba(255, 203, 90, .35);
+  pointer-events: none; opacity: 0; transition: opacity .25s; animation: gids-glow 1.8s ease-in-out infinite; }
+.gids.has-target .gids-ring { opacity: 1; }
+@keyframes gids-glow { 50% { border-color: #ffe08a;
+  box-shadow: 0 0 0 9999px rgba(10, 6, 2, .66), 0 0 0 1px #5a3510, 0 0 30px 8px rgba(255, 214, 110, .9), inset 0 0 18px rgba(255, 214, 110, .45); } }
+
+/* personage + tekstballon */
+.gids-panel { position: fixed; left: 0; right: 0; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); display: flex; align-items: flex-end;
+  padding: 0 max(10px, env(safe-area-inset-right, 0px)) 0 max(10px, env(safe-area-inset-left, 0px)); pointer-events: none;
+  max-width: 780px; margin: 0 auto; }
+.gids-panel.top { top: calc(8px + env(safe-area-inset-top, 0px)); bottom: auto; align-items: flex-start; }
+.gids-panel.right { flex-direction: row-reverse; }
+.gids-who { flex: none; width: clamp(110px, 22vw, 250px); height: clamp(150px, 46vh, 360px); position: relative; margin-bottom: -4px; }
+.gids-panel.top .gids-who { height: clamp(130px, 38vh, 300px); }
+.gids-panel.aside .gids-who { height: clamp(130px, 38vh, 300px); }
+.gids-who img { position: absolute; left: 50%; bottom: 0; height: 100%; width: auto; max-width: none; transform: translateX(-50%);
+  filter: drop-shadow(0 8px 10px rgba(0, 0, 0, .6)); animation: gids-in .45s cubic-bezier(.2, 1.4, .4, 1) both; }
+.gids-who img.wave { animation: gids-in .45s cubic-bezier(.2, 1.4, .4, 1) both, gids-bob 3.2s ease-in-out .5s infinite; }
+.gids-panel.top .gids-who img { bottom: auto; top: 0; }
+@keyframes gids-in { from { opacity: 0; transform: translate(-50%, 40px) scale(.92); } to { opacity: 1; transform: translateX(-50%); } }
+@keyframes gids-bob { 50% { transform: translate(-50%, -4px); } }
+.gids-bubble { position: relative; flex: 1; min-width: 0; pointer-events: auto; margin: 0 0 18px; padding: 12px 16px 10px; border-radius: 16px;
+  background: linear-gradient(#fbf1d8, #f1dfb4); color: #3a2410; border: 2px solid #8a5a22;
+  box-shadow: 0 0 0 2px #f2c14e inset, 0 10px 26px rgba(0, 0, 0, .55); animation: gids-pop .3s ease .08s both; }
+.gids-panel.top .gids-bubble { margin: 14px 0 0; }
+@keyframes gids-pop { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
+/* staartje naar het personage */
+.gids-bubble::before { content: ""; position: absolute; left: -11px; bottom: 26px; width: 18px; height: 18px; background: #f3e3bb;
+  border-left: 2px solid #8a5a22; border-bottom: 2px solid #8a5a22; transform: rotate(45deg); box-shadow: inset 2px -2px 0 0 #f2c14e; }
+.gids-panel.right .gids-bubble::before { left: auto; right: -11px; transform: rotate(-135deg); }
+.gids-panel.top .gids-bubble::before { bottom: auto; top: 26px; }
+.gids-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin: 0 70px 4px 0; font: 700 18px/1.2 Georgia, serif; color: #6b1d0a; }
+.gids-name small { font: 600 11px/1 system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: #8a5a22; }
+.gids-text { margin: 0; font: 400 16px/1.42 Georgia, serif; }
+.gids-text b { color: #7a2a0a; }
+.gids-skip { position: absolute; top: 6px; right: 8px; border: 0; background: none; color: #8a5a22; font: 600 12px/1 system-ui, sans-serif;
+  padding: 6px; cursor: pointer; text-decoration: underline; }
+.gids-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.gids-steps { font: 600 12px/1 system-ui, sans-serif; color: #8a6a3a; margin-right: auto; white-space: nowrap; }
+.gids-btn { border: 0; border-radius: 999px; padding: 9px 16px; font: 700 14px/1 system-ui, sans-serif; cursor: pointer; min-height: 40px; }
+.gids-prev { background: #e4cf9e; color: #5a3510; box-shadow: inset 0 -2px 0 #c9ab6c; }
+.gids-next { background: linear-gradient(#ffd981, #e8a317); color: #2a1606; box-shadow: inset 0 -3px 0 #a8700f, 0 2px 0 #5a3510; }
+.gids-btn:focus-visible, .gids-skip:focus-visible { outline: 3px solid #8f1d10; outline-offset: 2px; }
+.gids-prev[hidden], .gids-skip[hidden], .gids-who[hidden], .gids-all[hidden] { display: none; }
+/* slotplaatje: alle gidsen naast elkaar */
+.gids-all { position: fixed; left: 0; right: 0; bottom: calc(150px + env(safe-area-inset-bottom, 0px)); display: flex; justify-content: center;
+  align-items: flex-end; pointer-events: none; }
+.gids-all img { height: min(52vh, 380px, calc(100vw / 6 * 1.5)); width: auto; margin: 0 -1.2vw; filter: drop-shadow(0 8px 10px rgba(0, 0, 0, .6));
+  animation: gids-in2 .5s cubic-bezier(.2, 1.4, .4, 1) both; }
+@keyframes gids-in2 { from { opacity: 0; transform: translateY(40px) scale(.92); } }
+.gids-all img:nth-child(2) { animation-delay: .08s; } .gids-all img:nth-child(3) { animation-delay: .16s; } .gids-all img:nth-child(4) { animation-delay: .24s; }
+.gids-all img:nth-child(5) { animation-delay: .32s; } .gids-all img:nth-child(6) { animation-delay: .4s; }
+.gids-panel.solo { justify-content: center; max-width: 620px; }
+.gids-panel.solo .gids-bubble::before { display: none; }
+@media (max-height: 460px) {
+  .gids-text { font-size: 14px; line-height: 1.35; } .gids-name { font-size: 16px; } .gids-bubble { padding: 9px 13px 8px; margin-bottom: 8px; }
+  .gids-btn { min-height: 34px; padding: 7px 13px; font-size: 13px; } .gids-row { margin-top: 6px; }
+  .gids-all { bottom: calc(118px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (prefers-reduced-motion: reduce) { .gids-ring, .gids-who img, .gids-who img.wave, .gids-bubble, .gids-all img { animation: none; } .gids-ring { transition: none; } }

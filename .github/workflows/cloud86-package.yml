@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write   # alleen nodig om de branch cloud86-build bij te werken
 
 jobs:
   package:
@@ -86,3 +86,18 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true   # .htaccess (cache-instellingen) moet mee
           retention-days: 30
+      # Dezelfde map ook als losse branch, zodat hij met git op te halen is (bijv. door een AI-assistent
+      # die de bestanden in een gekoppelde map zet). Eén commit, steeds overschreven: geen geschiedenis.
+      # Bevat alleen wat ook al op de website staat plus het voorbeeldbestand zonder geheimen.
+      - name: Publish package to branch cloud86-build
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd cloud86-package
+          git init -q -b cloud86-build
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -q -m "Cloud86 package $(jq -r .version public/version.json) from ${GITHUB_REF_NAME}@${GITHUB_SHA::7}"
+          git push -f -q "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:cloud86-build

@@ -10,6 +10,10 @@
   min-height: 44px; padding: 8px 20px 8px 14px; border-radius: 12px; border: 2px solid #d9a85a; font: bold 16px Georgia, serif; color: #ffe6a6;
   background: linear-gradient(180deg, #6b4a28, #2a1b0e); box-shadow: 0 3px 0 #120a05, 0 6px 16px #000a; }
 .cq-back:hover { filter: brightness(1.15); }
+.cq-tour { position: absolute; right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); z-index: 5;
+  min-height: 44px; padding: 8px 18px; border-radius: 12px; border: 2px solid #d9a85a; font: bold 16px Georgia, serif; color: #ffe6a6;
+  background: linear-gradient(180deg, #6b4a28, #2a1b0e); box-shadow: 0 3px 0 #120a05, 0 6px 16px #000a; }
+.cq-tour:hover { filter: brightness(1.15); }
 
 /* ---------- Choose Your Mode ---------- */
 .cq-screen[data-screen='modes'] { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--u) * .8); }

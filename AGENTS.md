@@ -106,3 +106,17 @@ Een nieuwe kaart is één regel in `CARDS` (met `radius` en rand-tot-rand `range
 - Trophy Road is a static preview: there is no PvP, no trophies and no matchmaking. Arena names/thresholds in `src/conquest.js` are examples. Keep the "not available yet" wording until real PvP exists.
 - Art: `tools/art/conquest.py` (also run by `build.py`) turns `art/source/{modus-*,conquest-*,trophy-road-bg,arena-badges,trophy-icon,chest-icons}.png` into `public/assets/art/*.webp` and `src/art/conquest.json`. The three map segments are cross-faded into one strip (`MAP_OVERLAP`); mission positions in `rome.js` are source pixels of their segment. `daily-chest.png` is stored for the daily reward (not used yet).
 - Difficulty was tuned with a random-playing level-1 player (win rate falls from ~100 % at mission 1 to ~10 % at the final boss); it still needs real playtesting. Change `level`/`tempo` per mission in `rome.js`.
+
+## Guides and guided tour (v0.19.0)
+
+- `src/guide.js` + `src/guide.css`: six guides explain the game in a speech bubble; the rest of the screen dims and the part being explained gets a golden frame. Same idea as Relic Slide's `gids.js`. Player-facing text is English.
+- Cast (key -> art): `banner` Banner Maiden (leads the tour), `centurion`, `samurai` Shadow Samurai, `assassin` Persian Assassin, `priestess`, `pilot` P-51 Pilot.
+- **Tour** (`TOUR`): menu -> mode selection -> campaign map -> deck, achievements, friends, sign-in -> how a battle works. Offered once on the first visit to the menu; again via **? Tour** in the menu or on the mode screen (`lr:open` detail `tour`, or `lrGuide.start()` in the console).
+- **First battle** (`BATTLE`): cards, lanes, energy, pause. While a guide is open `window.lrGuideOpen` is true and the battle (including the countdown) waits.
+- Targets: a CSS selector, or `canvas:<key>` for something Phaser draws. `src/main.js` exposes those positions through `window.lrCanvasRect(key)` (menu: `play`, `battle`, `team`, `settings`, `trophy`, `decks`, `gift`, `bell`; battle: `cards`, `lanes`, `energy`, `pause`) using `screenRect()`.
+- Seen state: `localStorage 'lr-guide'` (`{ tour, battle }`), per device.
+- Art: `art/source/gids-*.png` -> `public/assets/art/guide-*.webp` via `tools/art/guides.py` (also run by `build.py`). The sources have a reddish fringe; only the solid figure is kept. `gids-banner-assassin.png` holds two figures.
+
+## Ready-made upload folder
+
+The Cloud86 workflow also force-pushes the packaged `public/` + `private/` to the branch **`cloud86-build`** (one commit, no history; source branch and commit in the message). `private/` only holds `legionroyale.example.php` and a README, never real credentials. Fetch it with `git fetch --depth=1 origin cloud86-build`.
