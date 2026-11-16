@@ -94,3 +94,11 @@
 .gids-panel.solo .gids-bubble { left: max(12px, calc(50vw - 310px)); right: auto; width: min(620px, calc(100vw - 24px)); }
 @media (max-height: 460px) { .gids { --fig-h: 96vh; } .gids-bubble { bottom: 8px; } }
 @media (prefers-reduced-motion: reduce) { .gids-who img, .gids-who img.wave { animation: none; } }
+/* v0.23.1: ballon bovenin (onderdeel staat onderin) mag het hoofd van de gids niet bedekken:
+   dan staat de ballon naast het hele personage in plaats van er half overheen. */
+.gids-panel.top .gids-bubble { left: calc(var(--fig-w) * .98); width: min(580px, calc(100vw - var(--fig-w) * .98 - 16px)); }
+.gids-panel.top.right .gids-bubble { left: auto; right: calc(var(--fig-w) * .98); }
+@media (max-height: 460px) {
+  .gids-panel.top .gids-bubble { padding: 7px 12px 6px; }
+  .gids-panel.top .gids-text { font-size: 13px; line-height: 1.3; }
+}
