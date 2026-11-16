@@ -430,10 +430,10 @@
   ]
  },
  "spy": {
-  "frameWidth": 195,
-  "frameHeight": 127,
-  "originX": 0.5179,
-  "originY": 0.9843,
+  "frameWidth": 144,
+  "frameHeight": 114,
+  "originX": 0.5,
+  "originY": 0.9825,
   "anims": {
    "idle": [
     0,

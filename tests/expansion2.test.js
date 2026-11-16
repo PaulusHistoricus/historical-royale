@@ -16,8 +16,9 @@ const run = (state, seconds, onTick) => {
 const NEW = ['spartan', 'plague', 'banner', 'flamegi', 'lancer', 'assassin'];
 
 test('1+2. zes nieuwe kaarten: kosten, levens, snelheid en interval zoals afgesproken; plaatsen kost energie', () => {
-  const want = { spartan: [4, 560, 32, 1.35], plague: [4, 110, 40, 2.3], banner: [5, 175, 45, 1.4],
-    flamegi: [5, 170, 31, 0.4], lancer: [4, 205, 105, 1.1], assassin: [3, 105, 90, 0.9] };
+  // v0.23 balans: Spartan 390 hp (was 560), Assassin 135 hp (was 105)
+  const want = { spartan: [4, 390, 32, 1.35], plague: [4, 110, 40, 2.3], banner: [5, 175, 45, 1.4],
+    flamegi: [5, 170, 31, 0.4], lancer: [4, 205, 105, 1.1], assassin: [3, 135, 90, 0.9] };
   for (const t of NEW) {
     const c = card(t);
     assert.deepEqual([c.cost, c.hp, c.speed, c.rate], want[t], t);
@@ -31,7 +32,7 @@ test('1+2. zes nieuwe kaarten: kosten, levens, snelheid en interval zoals afgesp
   }
 });
 
-test('3. Shield Wall: 40 % minder afstandsschade voor bondgenoten erachter, niet stapelend, niet tegen melee of kanon', () => {
+test('3. Shield Wall: minder afstandsschade (shieldPct) voor bondgenoten erachter, niet stapelend, niet tegen melee of kanon', () => {
   const dmgOn = (setup) => {
     const s = arena(); const victim = setup(s);
     const ev = run(s, 4);
@@ -51,7 +52,7 @@ test('3. Shield Wall: 40 % minder afstandsschade voor bondgenoten erachter, niet
   });
   const p = plain.find(e => e.kind === 'archer'), sh = shielded.find(e => e.kind === 'archer'), tw = two.find(e => e.kind === 'archer');
   assert.ok(p && sh && tw);
-  assert.ok(Math.abs(sh.damage - p.damage * 0.6) < 1e-9, `${sh.damage} vs ${p.damage}`);
+  assert.ok(Math.abs(sh.damage - p.damage * (1 - card('spartan').shieldPct)) < 1e-9, `${sh.damage} vs ${p.damage}`);
   assert.equal(tw.damage, sh.damage, 'twee Spartanen stapelen niet');
   // Melee wordt niet verminderd
   const s = arena();
@@ -59,7 +60,7 @@ test('3. Shield Wall: 40 % minder afstandsschade voor bondgenoten erachter, niet
   const m = addUnit(s, 'red', 0, idx('melee'), 400 - v.radius - 13 - 5);
   m.facing = 1; s.units.forEach(u => (u.distanceTravelled = 0));
   const ev = run(s, 1).filter(e => e.type === 'hit' && e.attackerId === m.id && e.targetId === v.id);
-  if (ev.length) assert.equal(ev[0].damage, card('melee').damage);
+  if (ev.length) assert.ok(Math.abs(ev[0].damage - card('melee').damage * 1.15) < 1e-9, 'melee tegen light, zonder schild');
 });
 
 test('3b. Shield Wall verdwijnt meteen als de Spartaan sterft', () => {
@@ -111,7 +112,7 @@ test('4b. gif stapelt niet: opnieuw raken ververst alleen de duur', () => {
   void doc;
 });
 
-test('5. Rally: +15 % snelheid en sneller aanvallen voor bondgenoten, niet stapelend, niet voor haarzelf', () => {
+test('5. Rally: sneller (auraSpeed) en sneller aanvallen voor bondgenoten, niet stapelend, niet voor haarzelf', () => {
   const s = arena();
   const maid = addUnit(s, 'blue', 0, idx('banner'), 300);
   const l = addUnit(s, 'blue', 0, idx('melee'), 330);
@@ -120,13 +121,13 @@ test('5. Rally: +15 % snelheid en sneller aanvallen voor bondgenoten, niet stape
   step(s, 1 / 60); step(s, 1 / 60);
   assert.equal(l.rallied, true); assert.equal(maid.rallied, false); assert.equal(free.rallied, false);
   const moved = l.x - x0, movedFree = free.x - f0;
-  assert.ok(Math.abs(moved / movedFree - 1.15) < 0.02, `${moved} vs ${movedFree}`);
+  assert.ok(Math.abs(moved / movedFree - (1 + card('banner').auraSpeed)) < 0.02, `${moved} vs ${movedFree}`);
   addUnit(s, 'blue', 0, idx('banner'), 310);
   const x1 = l.x; step(s, 1 / 60);
-  assert.ok(Math.abs((l.x - x1) / (movedFree / 2) - 1.15) < 0.02, 'twee vaandeldraagsters stapelen niet');
+  assert.ok(Math.abs((l.x - x1) / (movedFree / 2) - (1 + card('banner').auraSpeed)) < 0.02, 'twee vaandeldraagsters stapelen niet');
 });
 
-test('6. Flamethrower GI raakt alle vijanden vóór hem, niet erachter; gebouwen 30 %', () => {
+test('6. Flamethrower GI raakt alle vijanden vóór hem, niet erachter; gebouwen 40 % (fire x building)', () => {
   const s = arena();
   const gi = addUnit(s, 'blue', 0, idx('flamegi'), 400);
   const front = [addUnit(s, 'red', 0, idx('melee'), 440), addUnit(s, 'red', 0, idx('melee'), 470)];
@@ -142,7 +143,7 @@ test('6. Flamethrower GI raakt alle vijanden vóór hem, niet erachter; gebouwen
   const gi2 = addUnit(s2, 'blue', 0, idx('flamegi'), 600);
   const tower = s2.structures.find(t => t.side === 'red' && t.kind === 'tower' && t.lane === 0);
   const hit = run(s2, 3).find(e => e.type === 'hit' && e.attackerId === gi2.id && e.targetId === tower.id);
-  assert.ok(hit); assert.ok(Math.abs(hit.damage - card('flamegi').damage * 0.3) < 1e-9);
+  assert.ok(hit); assert.ok(Math.abs(hit.damage - card('flamegi').damage * 0.4) < 1e-9);
 });
 
 test('7. Steppe Lancer: na 65 aanloop +20 schade en 30 terugduwen, één keer, nooit door een gebouw', () => {

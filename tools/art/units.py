@@ -160,9 +160,10 @@ def build_units(SRC, OUT, MANIFEST):
         'attack':(486,588,6),'reveal':(618,725,4),'hit':(755,860,3),'death':(890,1010,6)},570,1432,
         fx={'cloak':{4,5},'reveal':{0},'death':{4,5}})
     manifest['samurai']=build(OUT,'samurai',G,112,'idle',{'-red':ident,'-blue':toblue})
-    G=board_unit(SRC+'spion-bord.png',{'idle':(5,158,4,410,1110),'walk':(168,302,6),'attack':(312,440,6),
-        'charm':(447,580,8),'hit':(700,826,3,410,930),'death':(835,990,6)},410,1528,fx={'death':{4,5}},
-        bg_blobs=False)   # zwart pak = kleur van het bord
+    # Spy (v0.23): sheet met echte transparantie (spion-sprites.png); het oude bord sneed bij 'charm' de benen af.
+    from transparent_sheet import transparent_unit
+    G=transparent_unit(SRC+'spion-sprites.png',{'idle':(5,147,4),'walk':(147,276,6),'attack':(276,410,6),
+        'charm':(410,542,8),'hit':(542,660,3),'death':(661,772,6)},225,1340,fx={'death':{4,5}})
     manifest['spy']=build(OUT,'spy',G,110,'idle',{'':ident})
     G=board_unit(SRC+'genezeres-bord.png',{'idle':(5,155,4,400,1160),'walk':(165,312,6),'heal':(320,485,6),
         'attack':(490,640,6),'hit':(648,790,3,400,880),'death':(798,970,7)},400,1532,fx={'death':{5,6}})

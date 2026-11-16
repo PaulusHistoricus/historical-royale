@@ -136,6 +136,18 @@ Een nieuwe kaart is één regel in `CARDS` (met `radius` en rand-tot-rand `range
 - `src/unit-info.js`: `unitKinds(type)` -> `['Bio'|'Mechanical', 'Special'?]` (from `material` and `role: 'special'` in `CARDS`) and `ABILITY[type]` (one short English line). Shown as chips + ability on deck tiles (`screens.js`) and as a B/M/S badge with a hover text on the enemy cards in the mission panel (`conquest.js`). A new card needs an `ABILITY` line (`tests/unit-info.test.js`).
 - Rules tied to the kind (`src/sim/battle.js`): poison, healing, Shield Wall, Rally aura and the Spy only affect Bio; Mechanical takes 15 % less from normal attacks and 25 % more from siege.
 
+## Damage model and balance (v0.23.0)
+
+- Every card has `armor` (`light` | `medium` | `heavy` | `mechanical`) and `attack` (`melee` | `pierce` | `siege` | `fire` | `poison` | `magic`) in `CARDS`. Buildings are armor `building` and shoot `pierce` (`STRUCTURE_ATTACK`).
+- `DAMAGE_TABLE[attack][armor]` in `src/sim/config.js` multiplies every hit (`damageFactor()` in `battle.js`). It replaces the old mechanical-armour rule (×0.85, siege ×1.25) and the Flamethrower GI's `structurePct`. Shield Wall, charge, rage, backstab and stealth still stack on top. The P-51 strike and poison/burn ticks are outside the table.
+- Deck tiles show "Heavy armor · Melee" (`combatLine()` in `src/unit-info.js`) with a hint per attack type.
+- Balance was re-tuned with 3,200 simulated matches per round (spread of win rates 25.5 -> 15.9 points; Legionary 69 % -> 54 %). Campaign `level`/`tempo` per mission re-tuned to the same curve. Tests read values from `CARDS` where they can, so a balance change does not need test edits.
+
+## Spy sprites (v0.23.0)
+
+- `art/source/spion-sprites.png` (true transparency, one row per animation) replaces the old board for the in-game spy; cut by `tools/art/transparent_sheet.py`, which removes the red/yellow fringe but keeps glow (hearts, muzzle flash, pink dust). The old board lost her legs in the `charm` frames.
+- `tools/art/boards.py` gained a `matte='grabcut'` option (OpenCV) for boards when `rembg` is not installed.
+
 ## Ready-made upload folder
 
 The Cloud86 workflow also force-pushes the packaged `public/` + `private/` to the branch **`cloud86-build`** (one commit, no history; source branch and commit in the message). `private/` only holds `legionroyale.example.php` and a README, never real credentials. Fetch it with `git fetch --depth=1 origin cloud86-build`.

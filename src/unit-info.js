@@ -33,3 +33,20 @@ export function unitKinds(type) {
   return kinds;
 }
 export const kindChips = type => unitKinds(type).map(k => `<span class="lr-kind ${k.toLowerCase()}">${k}</span>`).join('');
+
+// Schademodel (DAMAGE_TABLE in sim/config.js) in spelerstaal.
+export const ARMOR_NAME = { light: 'Light armor', medium: 'Medium armor', heavy: 'Heavy armor', mechanical: 'Mechanical' };
+export const ATTACK_NAME = { melee: 'Melee', pierce: 'Pierce', siege: 'Siege', fire: 'Fire', poison: 'Poison', magic: 'Magic' };
+export const ATTACK_HINT = {
+  melee: 'Steady against everything; weaker against heavy armor and machines.',
+  pierce: 'Strong against light armor; weak against heavy armor, machines and buildings.',
+  siege: 'Double damage to buildings, extra against machines; weak against light units.',
+  fire: 'Strong against light armor; barely hurts buildings.',
+  poison: 'Same against all living units; weak against machines and buildings.',
+  magic: 'Same against everything except buildings.',
+};
+/** "Medium armor · Melee" */
+export function combatLine(type) {
+  const c = CARDS.find(x => x.type === type);
+  return c ? `${ARMOR_NAME[c.armor] ?? c.armor} · ${ATTACK_NAME[c.attack] ?? c.attack}` : '';
+}

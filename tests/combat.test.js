@@ -187,7 +187,7 @@ test('aanvalssnelheid klopt: een legionair slaat één keer per 0,9 s', () => {
   dummy.hp = dummy.max = 100000;
   const log = run(s, 9.05);
   assert.equal(hitsBy(log, blue).length, 11); // t=0 en daarna elke 0,9 s
-  assert.equal(dummy.max - dummy.hp >= 11 * Math.round(CARDS[LEGIONAIR].damage * 0.85), true); // mechanical armor
+  assert.equal(Math.round(dummy.max - dummy.hp), Math.round(11 * CARDS[LEGIONAIR].damage * 0.75)); // melee tegen mechanical
 });
 
 test('eenheden in verschillende banen negeren elkaar', () => {
