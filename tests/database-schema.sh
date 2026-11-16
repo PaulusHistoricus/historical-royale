@@ -8,8 +8,8 @@ db() {
 
 schema=database/schema.sql
 migration=database/migrations/001_email_auth.sql
-auth_ddl() {
-  sed -n '/^CREATE TABLE IF NOT EXISTS email_identities (/,$p' "$1"
+auth_ddl() {   # e-mailblok tot het einde, zonder latere migratieblokken (=== 003 …) en lege regels aan het eind
+  sed -n '/^CREATE TABLE IF NOT EXISTS email_identities (/,$p' "$1" | sed '/^-- === 0[0-9][0-9]/,$d' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}'
 }
 
 diff -u <(auth_ddl "$schema") <(auth_ddl "$migration")
@@ -34,9 +34,9 @@ assert_missing_parent() {
 }
 
 assert_complete_schema() {
-  assert_value 16 "$(db "$@" -e "SELECT COUNT(*) FROM information_schema.TABLES
+  assert_value 17 "$(db "$@" -e "SELECT COUNT(*) FROM information_schema.TABLES
     WHERE TABLE_SCHEMA=DATABASE() AND ENGINE='InnoDB'")"
-  assert_value 15 "$(db "$@" -e "SELECT COUNT(*) FROM information_schema.REFERENTIAL_CONSTRAINTS
+  assert_value 16 "$(db "$@" -e "SELECT COUNT(*) FROM information_schema.REFERENTIAL_CONSTRAINTS
     WHERE CONSTRAINT_SCHEMA=DATABASE()")"
   assert_value 1 "$(db "$@" -e "SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE
     WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='email_identities'
@@ -97,5 +97,25 @@ assert_value 1 "$(db "$@" lr_upgrade -e "SELECT COUNT(*) FROM players p JOIN pla
 db "$@" -e 'CREATE DATABASE lr_signed2'
 db "$@" lr_signed2 -e 'CREATE TABLE players (id BIGINT NOT NULL PRIMARY KEY) ENGINE=InnoDB'
 if db "$@" lr_signed2 < "$migration2" 2>/dev/null; then printf '002 accepted an incompatible players table\n' >&2; exit 1; fi
+
+# Migration 003 (campaign progress) on a database without it, with an existing player and match; twice.
+migration3=database/migrations/003_campaign_progress.sql
+diff -u <(sed -n '/^-- === 003/,$p' "$schema") <(sed -n '/^-- === 003/,$p' "$migration3")
+db "$@" -e 'CREATE DATABASE lr_upgrade3'
+sed '/^-- === 003/,$d' "$schema" | db "$@" lr_upgrade3
+db "$@" lr_upgrade3 -e "INSERT INTO players (id,public_id,display_name) VALUES (9,'12345678-1234-1234-1234-123456789abe','Campaigner');
+  INSERT INTO matches (server_match_id,mode,player_id) VALUES ('12345678-1234-4234-8234-123456789abc','ai',9)"
+db "$@" lr_upgrade3 < "$migration3"
+db "$@" lr_upgrade3 < "$migration3"
+assert_complete_schema "$@" lr_upgrade3
+db "$@" lr_upgrade3 -e "INSERT INTO campaign_progress (player_id,mission_id,stars) VALUES (9,'rome_001',2)"
+if db "$@" lr_upgrade3 -e "INSERT INTO campaign_progress (player_id,mission_id,stars) VALUES (9,'rome_002',4)" 2>/dev/null; then
+  printf 'campaign_progress accepted 4 stars\n' >&2; exit 1
+fi
+assert_value 1 "$(db "$@" lr_upgrade3 -e "SELECT COUNT(*) FROM matches m JOIN campaign_progress c ON c.player_id=m.player_id
+  WHERE m.player_id=9 AND m.mission_id IS NULL AND c.stars=2")"
+db "$@" -e 'CREATE DATABASE lr_signed3'
+db "$@" lr_signed3 -e 'CREATE TABLE players (id BIGINT NOT NULL PRIMARY KEY) ENGINE=InnoDB'
+if db "$@" lr_signed3 < "$migration3" 2>/dev/null; then printf '003 accepted an incompatible players table\n' >&2; exit 1; fi
 
 printf 'MariaDB install, migration, retry and foreign key checks passed.\n'

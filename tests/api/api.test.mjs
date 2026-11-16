@@ -118,6 +118,42 @@ test('gevecht: XP, munten, fragmenten, prestaties, één keer tellen, te kort te
   assert.equal(p.stats.wins, 1); assert.equal(p.stats.towers_destroyed, 2); assert.equal(p.player.coins, 60);
 });
 
+test('campagne: vrijspelen, sterren alleen omhoog, munten alleen voor nieuwe sterren, import zonder munten', { skip }, async () => {
+  const a = client(); await a.login('livia@example.test');
+  assert.equal((await a.post('match-start.php', { missionId: 'rome_002' })).status, 403, 'nog op slot');
+  assert.equal((await a.post('match-start.php', { missionId: 'atlantis_001' })).status, 400, 'bestaat niet');
+  const play = async (missionId, result, stars) => {
+    const m = (await a.post('match-start.php', { missionId })).data;
+    assert.ok(m.matchId, missionId);
+    matchAge(60);
+    const r = await a.post('match-finish.php', { matchId: m.matchId, result, stars });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    return r.data;
+  };
+  let r = await play('rome_001', 'win', 2);
+  assert.deepEqual(r.mission, { id: 'rome_001', stars: 2, best: 2, newStars: 2, coins: 20 });
+  assert.ok(r.coinsGained >= 40 + 20);
+  r = await play('rome_001', 'win', 1);
+  assert.deepEqual(r.mission, { id: 'rome_001', stars: 1, best: 2, newStars: 0, coins: 0 }, 'geen munten zonder nieuwe ster');
+  r = await play('rome_001', 'win', 9);
+  assert.deepEqual(r.mission, { id: 'rome_001', stars: 3, best: 3, newStars: 1, coins: 10 }, 'maximaal 3 sterren');
+  r = await play('rome_002', 'loss', 3);
+  assert.deepEqual(r.mission, { id: 'rome_002', stars: 0, best: 0, newStars: 0, coins: 0 }, 'verlies telt niet');
+  assert.equal((await a.post('match-start.php', { missionId: 'rome_003' })).status, 403, 'rome_002 nog niet gehaald');
+  assert.deepEqual((await a.get('campaign.php')).data.progress, { rome_001: 3 });
+  assert.equal(sql("SELECT SUM(amount) FROM wallet_ledger w JOIN players p ON p.id=w.player_id JOIN email_identities e ON e.player_id=p.id WHERE e.email='livia@example.test' AND reason='mission'"), '30');
+
+  const coins = (await a.get('profile.php')).data.player.coins;
+  const imp = await a.post('campaign.php', { import: { rome_001: 1, rome_002: 2, rome_bonus_01: 3, rome_009: 7, hacked: 3, rome_010: '3', rome_011: 0 } });
+  assert.equal(imp.status, 200, JSON.stringify(imp.data));
+  assert.deepEqual(imp.data.progress, { rome_001: 3, rome_002: 2, rome_bonus_01: 3, rome_009: 3 });
+  assert.equal((await a.get('profile.php')).data.player.coins, coins, 'import levert geen munten op');
+  assert.equal((await a.post('match-start.php', { missionId: 'rome_003' })).status, 200, 'nu wel open');
+  assert.equal((await a.post('campaign.php', { import: 'x' })).status, 400);
+  const g = client(); await g.get('me.php');
+  assert.equal((await g.get('campaign.php')).status, 401);
+});
+
 test('level-up en streaks', { skip }, async () => {
   const a = client(); await a.login('dido@example.test');
   let last;

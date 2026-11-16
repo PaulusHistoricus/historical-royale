@@ -1,5 +1,6 @@
 // The Conquest: missieregels in de simulatie, sterren, vrijspelen en de gegevens van Rise of Rome.
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { createBattle, battleRules, deploy, step, mulberry32 } from '../src/sim/battle.js';
 import { CARDS, MATCH_SECONDS, OVERTIME_AT, ENERGY_START, ENERGY_MAX, LANES, DEPLOY_ZONE } from '../src/sim/config.js';
@@ -249,4 +250,14 @@ test('elke missie speelt in een bestaande arena; elk gebied heeft er een', () =>
   assert.equal(arenaFor(missionById('rome_025')), 'arena-rome');
   assert.equal(arenaFor({ ...missionById('rome_001'), arena: 'arena-rome' }), 'arena-rome');
   for (const a of Object.values(ARENAS)) assert.deepEqual(a, { width: 1920, height: 620 }, 'zelfde maat als arena.jpg');
+});
+
+test('server (public/api/_campaign.php) kent dezelfde missies en volgorde als het spel', () => {
+  const php = readFileSync(new URL('../public/api/_campaign.php', import.meta.url), 'utf8');
+  const list = name => [...php.match(new RegExp(`const ${name} = \\[([^\\]]*)\\]`))[1].matchAll(/'([a-z_0-9]+)'/g)].map(m => m[1]);
+  assert.deepEqual(list('CAMPAIGN_MAIN'), ROME.missions.filter(x => !x.bonus).map(x => x.id));
+  const bonus = list('CAMPAIGN_BONUS');                     // sleutel, waarde, sleutel, waarde
+  const pairs = Object.fromEntries(bonus.flatMap((v, i) => (i % 2 ? [] : [[v, bonus[i + 1]]])));
+  assert.deepEqual(pairs, Object.fromEntries(ROME.missions.filter(x => x.bonus).map(x => [x.id, requirement(x)])));
+  assert.match(php, /const MISSION_STAR_COINS = \d+;/);
 });

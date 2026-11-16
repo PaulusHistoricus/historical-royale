@@ -24,8 +24,9 @@ already contains data, export a SQL backup before importing.
 | --- | --- |
 | Empty database | `database/schema.sql` |
 | Interrupted import with missing base tables, including a failed attempt to import 001 before the base schema | `database/schema.sql` |
-| Complete base schema from an older release, with email auth missing or only partially installed | `database/migrations/001_email_auth.sql`, then `002_profile_cards_friends.sql` |
-| Database from v0.15.x (email login works) | `database/migrations/002_profile_cards_friends.sql` |
+| Complete base schema from an older release, with email auth missing or only partially installed | `database/migrations/001_email_auth.sql`, then `002_profile_cards_friends.sql`, then `003_campaign_progress.sql` |
+| Database from v0.15.x (email login works) | `database/migrations/002_profile_cards_friends.sql`, then `003_campaign_progress.sql` |
+| Database from v0.16–v0.20 (profiles, cards and friends work) | `database/migrations/003_campaign_progress.sql` |
 
 Leave **Enable foreign key checks** selected and run the import. The full schema
 creates `players` first, then creates the tables that reference it, including the

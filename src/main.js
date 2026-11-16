@@ -390,7 +390,7 @@ class Battle extends Phaser.Scene {
     this.selected = null;          // gekozen vak in de hand (0..3), of null
     this.hand = createHand(account.deckIndices(), this.state.rng);
     this.stats = { unitsDeployed: 0, towersDestroyed: 0 };
-    this.matchStart = account.signedIn ? account.api('POST', 'match-start.php', {}).catch(() => null) : Promise.resolve(null);
+    this.matchStart = account.signedIn ? account.api('POST', 'match-start.php', mission ? { missionId: mission.id } : {}).catch(() => null) : Promise.resolve(null);
     const again = () => this.scene.restart();
     const toMenu = () => { reopenConquest = !!this.mission; this.scene.start('menu'); };
     window.addEventListener('lr:again', again); window.addEventListener('lr:to-menu', toMenu);
@@ -849,9 +849,10 @@ class Battle extends Phaser.Scene {
     this.resultShown = true;
     this.selected = null;
     const detail = { winner, guest: !account.signedIn };
+    const stars = this.mission ? starsFor(this.mission, this.state) : 0;
     if (this.mission) {
-      // Sterren en vrijspelen: regels in src/campaign/campaign.js, opslag in src/conquest.js.
-      const result = conquest.record(this.mission.id, starsFor(this.mission, this.state));
+      // Sterren en vrijspelen: regels in src/campaign/campaign.js, opslag in src/conquest.js (ingelogd: server).
+      const result = conquest.record(this.mission.id, stars);
       detail.mission = { id: this.mission.id, n: this.mission.n, title: this.mission.title, ...result };
     }
     // Nooit blijven hangen op het netwerk: na 8 s tonen we de uitslag hoe dan ook.
@@ -860,7 +861,8 @@ class Battle extends Phaser.Scene {
     if (match?.matchId) {
       try {
         detail.reward = await timeout(account.api('POST', 'match-finish.php', { matchId: match.matchId,
-          result: winner === 'blue' ? 'win' : 'loss', ...this.stats }), 8000);
+          result: winner === 'blue' ? 'win' : 'loss', ...this.stats, ...(this.mission ? { stars } : {}) }), 8000);
+        conquest.confirm(detail.reward?.mission);
         if (account.profile) account.loadProfile().catch(() => {});
       } catch (e) { detail.error = e.message; }
     }

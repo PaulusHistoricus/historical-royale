@@ -102,7 +102,7 @@ Een nieuwe kaart is één regel in `CARDS` (met `radius` en rand-tot-rand `range
 - `src/campaign/rome.js`: data only — world 1 "Rise of Rome", 25 missions + 2 bonus missions with **stable ids** (`rome_001` … `rome_025`, `rome_bonus_01/02`). Never renumber: saved progress uses the ids. A new world is a new file registered in `WORLDS` in `src/campaign/campaign.js`.
 - `src/campaign/campaign.js`: pure rules (no DOM): unlock order, star conditions (`win`, `towers2`, `tower1`, `time:N`, `castle:N`), `missionRules()` -> `createBattle({ rules })`. Tested in `tests/campaign.test.js`.
 - Simulation: `battleRules()` in `src/sim/battle.js` (`state.rules`): `timeLimit`, `goal` (`castle` | `towers` | `survive`), `energyStart`, `energyRate`, `aiDeck`, `aiTempo`. Without rules a battle is exactly the classic battle (a test checks this).
-- Progress is stored on the device (`localStorage 'lr-conquest-v1'`, `{ missionId: stars }`). There is **no server-side campaign progress yet** and missions give no extra rewards: a signed-in player gets the normal battle reward through `match-start/finish`. Server storage (`campaign_progress`, migration 003) is the next step; do not add mission rewards before that exists.
+- Progress: signed in -> server (v0.21.0, see below); guest -> this device only (`localStorage 'lr-conquest-v1'`, `{ missionId: stars }`).
 - Trophy Road is a static preview: there is no PvP, no trophies and no matchmaking. Arena names/thresholds in `src/conquest.js` are examples. Keep the "not available yet" wording until real PvP exists.
 - Art: `tools/art/conquest.py` (also run by `build.py`) turns `art/source/{modus-*,conquest-*,trophy-road-bg,arena-badges,trophy-icon,chest-icons}.png` into `public/assets/art/*.webp` and `src/art/conquest.json`. The three map segments are cross-faded into one strip (`MAP_OVERLAP`); mission positions in `rome.js` are source pixels of their segment. `daily-chest.png` is stored for the daily reward (not used yet).
 - Difficulty was tuned with a random-playing level-1 player (win rate falls from ~100 % at mission 1 to ~10 % at the final boss); it still needs real playtesting. Change `level`/`tempo` per mission in `rome.js`.
@@ -119,8 +119,17 @@ Een nieuwe kaart is één regel in `CARDS` (met `radius` en rand-tot-rand `range
 
 ## Campaign arenas (v0.20.0)
 
-- Three arena backgrounds: `arena` (classic, from `world.py`), `arena-sunset` (countryside, aqueduct) and `arena-rome` (city wall, Colosseum). Region -> arena in `ROME.arenas` (`src/campaign/rome.js`); a mission may set its own `arena`. `arenaFor(mission)` in `campaign.js`. A quick battle picks one at random.
+- Three arena backgrounds: `arena` (classic, from `world.py`), `arena-sunset` (countryside, aqueduct) and `arena-rome` (city wall, Colosseum). Region -> arena in `ROME.arenas` (`src/campaign/rome.js`); a mission may set its own `arena`. `arenaFor(mission)` in `campaign.js`. A quick battle picks at random from **all** arenas in `src/art/arenas.json` plus the classic one, so a new arena added to `ARENAS` in `arenas.py` is automatically in the rotation.
 - `tools/art/arenas.py` (also run by `build.py`): `art/source/arena-*.png` -> `public/assets/art/arena-*.jpg` (1920 x 620, same as `arena.jpg`) + `src/art/arenas.json`. The simulation is fixed (lanes at y 123/221), so the sources are warped vertically: above the top lane and below the bottom lane the scale is unchanged, only the strip between the lanes is compressed (PCHIP curve). Lane centres per source are in `ARENAS`; `--check` draws the lanes over the result. A new arena needs two clear horizontal lanes and no painted towers/castles.
+
+## Campaign progress on the server (v0.21.0)
+
+- Migration `database/migrations/003_campaign_progress.sql` (same block at the end of `schema.sql`; `tests/database-schema.sh` checks both): table `campaign_progress(player_id, mission_id, stars 1..3, first_cleared_at, updated_at)` and column `matches.mission_id`.
+- `public/api/_campaign.php`: mission ids (`CAMPAIGN_MAIN`), bonus unlocks (`CAMPAIGN_BONUS`) and `MISSION_STAR_COINS`. Must match `src/campaign/rome.js` (`tests/campaign.test.js` checks it).
+- `match-start.php` takes an optional `missionId`: unknown -> 400, still locked on the server -> 403. `match-finish.php` takes `stars` (client-reported, clamped 1..3 on a win, 0 on a loss; same trust model and 30 s minimum as every battle), stores the best result and pays `MISSION_STAR_COINS` per star earned for the first time only (no farming). The response has `mission: { id, stars, best, newStars, coins }`; `coinsGained` includes those coins.
+- `campaign.php`: GET returns `{ progress }`; POST `{ import: { missionId: stars } }` carries guest progress from this device into the account: stars only go up, unknown ids are ignored, no coins.
+- Browser (`src/conquest.js`): signed in -> progress comes from the server (cached in memory, re-fetched only when the signed-in player changes); guest -> localStorage. On sign-in, local stars the server does not have yet are imported. If the server cannot be reached the map falls back to the device copy; locked missions then start without rewards.
+- Deploying: run `003_campaign_progress.sql` once in phpMyAdmin on an existing database (see `docs/auth-deployment.md`). Without it, `match-start.php` fails and battles give no rewards (the game itself still works).
 
 ## Ready-made upload folder
 
