@@ -84,7 +84,8 @@ function showModes() {
       ${card('mode-ranked', 'ranked', 'SEASONAL RANKED', 'Coming soon')}
       <button class="cq-quick" data-mode="quick"><b>⚔ Quick Battle</b><small>One battle against the computer</small></button>
     </div>
-    ${backButton('menu', 'Menu')}`, el => {
+    ${backButton('menu', 'Menu')}<button class="cq-tour" data-tour>? Tour</button>`, el => {
+    el.querySelector('[data-tour]').addEventListener('click', () => window.dispatchEvent(new CustomEvent('lr:open', { detail: 'tour' })));
     el.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => {
       const m = b.dataset.mode;
       if (m === 'conquest') showConquest();

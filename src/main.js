@@ -3,6 +3,7 @@ import './style.css';
 import './auth.js';
 import './screens.js';
 import { conquest } from './conquest.js';
+import './guide.js';
 import { missionRules, enemyLevels, starsFor, GOAL_TEXT } from './campaign/campaign.js';
 import { account } from './account.js';
 import { W, LANES, FIELD_BOTTOM, CARDS, ENERGY_MAX } from './sim/config.js';
@@ -105,6 +106,14 @@ function playMusic(scene, key) {
   cur?.stop(); cur?.destroy();
   window.__music = scene.sound.add(key, { loop: true, volume: 0.32 });
   window.__music.play();
+}
+// Plek van iets dat Phaser tekent, in schermpixels: voor de gouden lijst van de rondleiding
+// (src/guide.js vraagt dit op via window.lrCanvasRect(sleutel)). x/y/w/h in scènecoördinaten.
+function screenRect(scene, x, y, w, h) {
+  const cam = scene.cameras.main, canvas = scene.game.canvas, r = canvas.getBoundingClientRect();
+  const k = r.width / canvas.width;
+  return { left: r.left + (x - cam.worldView.x) * cam.zoom * k, top: r.top + (y - cam.worldView.y) * cam.zoom * k,
+    width: w * cam.zoom * k, height: h * cam.zoom * k };
 }
 const SIM_STEP = 1 / 60;            // vaste simulatiestap, onafhankelijk van de framerate
 const TEAM = { blue: 0x4f9be8, red: 0xe0513f };
@@ -246,8 +255,17 @@ class Menu extends Phaser.Scene {
       if (!standalone && !this.install.visible && window.__install?.prompt) this.install.setVisible(true);
     } });
     this.version = this.add.text(0, 0, VERSION_LABEL, { fontFamily: FONT, color: '#f5e6c4', stroke: '#000', strokeThickness: 3 }).setOrigin(1, 1);
+    // Rondleiding opnieuw starten (src/guide.js)
+    this.tour = this.add.text(0, 0, '?  TOUR', { fontFamily: FONT, fontStyle: 'bold', color: '#ffe9a6', stroke: '#2a1d10',
+      backgroundColor: '#3b2a18ee', padding: { x: 14, y: 8 } }).setOrigin(1, 1).setInteractive({ useHandCursor: true });
+    this.tour.on('pointerdown', () => openScreen('tour'));
+    // Waar de knoppen staan, voor de gouden lijst van de rondleiding.
+    const named = { play: this.buttons[0], battle: this.buttons[1], team: this.buttons[2], settings: this.buttons[3],
+      trophy: this.icons[0], decks: this.icons[1], gift: this.icons[2], bell: this.icons[3] };
+    const rects = key => { const b = named[key]?.getBounds(); return b ? screenRect(this, b.x, b.y, b.width, b.height) : null; };
+    window.lrCanvasRect = rects;
     this.scale.on('resize', this.layout, this);
-    this.events.once('shutdown', () => this.scale.off('resize', this.layout, this));
+    this.events.once('shutdown', () => { this.scale.off('resize', this.layout, this); if (window.lrCanvasRect === rects) window.lrCanvasRect = null; });
     this.layout();
   }
 
@@ -336,7 +354,8 @@ class Menu extends Phaser.Scene {
     this.toast.setPosition(w / 2, h * 0.92).setFontSize(Math.max(16, Math.round(h * 0.03)));
     this.install.setPosition(12, h - 12).setFontSize(Math.max(14, Math.round(h * 0.026)));
     this.version.setPosition(w - 10, h - 8).setFontSize(Math.max(11, Math.round(h * 0.018)));
-    for (const t of [this.title, this.toast, this.version, this.install]) t.setResolution(1);
+    this.tour.setFontSize(Math.max(14, Math.round(h * 0.026))).setPosition(w - 12, h - 14 - Math.max(11, Math.round(h * 0.018)) * 1.4);
+    for (const t of [this.title, this.toast, this.version, this.install, this.tour]) t.setResolution(1);
   }
 }
 
@@ -433,8 +452,25 @@ class Battle extends Phaser.Scene {
       if (status === 'stale') this.message.setText('New version available — refresh the page');
     });
 
+    // Waar de onderdelen staan, voor de uitleg bij het eerste gevecht (src/guide.js).
+    const rects = key => {
+      const bar = this.bar, sc = bar.sc;
+      if (key === 'cards') {
+        const a = this.cards[0].zone, b = this.cards[HAND_SIZE - 1].zone;
+        return screenRect(this, a.x - a.width / 2, a.y - a.height / 2, b.x + b.width / 2 - (a.x - a.width / 2), a.height);
+      }
+      if (key === 'lanes') {
+        const z = deployZone(this.state, 'blue', 0);
+        return screenRect(this, z.min, LANES[0] - 26, z.max - z.min, LANES[LANES.length - 1] - LANES[0] + 54);
+      }
+      if (key === 'energy') { const p = BAR_ART.plaque; return screenRect(this, bar.x + p.x * sc, bar.y + p.y * sc, p.w * sc, p.h * sc); }
+      if (key === 'pause') return screenRect(this, this.pauseButton.x - 15, this.pauseButton.y - 15, 30, 30);
+      return null;
+    };
+    window.lrCanvasRect = rects;
     this.scale.on('resize', this.layout, this);
     this.events.once('shutdown', () => {
+      if (window.lrCanvasRect === rects) window.lrCanvasRect = null;
       this.scale.off('resize', this.layout, this); this.fireLoop?.stop(); this.fireLoop = null;
       for (const l of Object.values(this.loops ?? {})) l?.stop();
       this.loops = {};
@@ -828,7 +864,7 @@ class Battle extends Phaser.Scene {
 
   update(_time, delta) {
     const dt = Math.min(delta / 1000, 0.1);
-    if (this.paused) return;
+    if (this.paused || window.lrGuideOpen) return;   // ook de aftelling wacht op de uitleg (src/guide.js)
     if (this.countdown > 0) {
       const before = Math.ceil(this.countdown);
       this.countdown = Math.max(0, this.countdown - dt);
