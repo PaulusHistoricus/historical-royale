@@ -2,7 +2,9 @@
 declare(strict_types=1);
 require __DIR__ . '/_email_auth.php';
 require __DIR__ . '/_game.php';
+require __DIR__ . '/_campaign.php';
 // Sluit een gevecht af: XP, munten, kaartfragmenten en prestaties. Elk gevecht telt maar één keer.
+// Campagnemissie: ook de sterren (1..3 bij winst); munten alleen voor sterren die je nog niet had.
 const MIN_MATCH_SECONDS = 30;
 try {
     $data = readJsonRequest();
@@ -16,7 +18,7 @@ try {
     $pdo = db();
     $pdo->beginTransaction();
     try {
-        $q = $pdo->prepare('SELECT id, TIMESTAMPDIFF(SECOND, started_at, UTC_TIMESTAMP()) AS age FROM matches
+        $q = $pdo->prepare('SELECT id, mission_id, TIMESTAMPDIFF(SECOND, started_at, UTC_TIMESTAMP()) AS age FROM matches
             WHERE server_match_id=? AND player_id=? AND finished_at IS NULL FOR UPDATE');
         $q->execute([$matchId, $id]);
         $m = $q->fetch();
@@ -42,10 +44,19 @@ try {
         addCoins($pdo, $id, $coins, 'match', $matchId);
         $drops = $win ? rollDrops(3, 2, 5) : rollDrops(1, 1, 2);
         addFragments($pdo, $id, $drops);
+        $mission = null;
+        if ($m['mission_id'] !== null && isMission($m['mission_id'])) {
+            $stars = $win ? max(1, min(3, (int)($data['stars'] ?? 1))) : 0;
+            [$before, $best] = $stars > 0 ? recordStars($pdo, $id, $m['mission_id'], $stars) : [0, campaignProgress($pdo, $id)[$m['mission_id']] ?? 0];
+            $newStars = max(0, $best - $before);
+            $missionCoins = MISSION_STAR_COINS * $newStars;
+            if ($missionCoins > 0) { addCoins($pdo, $id, $missionCoins, 'mission', $matchId); $coins += $missionCoins; }
+            $mission = ['id' => $m['mission_id'], 'stars' => $stars, 'best' => $best, 'newStars' => $newStars, 'coins' => $missionCoins];
+        }
         $new = updateAchievements($pdo, $id);
         $pdo->commit();
     } catch (Throwable $e) { if ($pdo->inTransaction()) $pdo->rollBack(); throw $e; }
     jsonResponse(['ok' => true, 'xpGained' => $xp, 'coinsGained' => $coins, 'fragments' => $drops,
         'levelBefore' => $before['level'], 'level' => $after['level'], 'xpInLevel' => $after['xpInLevel'], 'xpForNext' => $after['xpForNext'],
-        'achievements' => $new, 'player' => publicPlayer(sessionPlayer())]);
+        'achievements' => $new, 'mission' => $mission, 'player' => publicPlayer(sessionPlayer())]);
 } catch (Throwable $e) { failSafe($e); }

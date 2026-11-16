@@ -169,3 +169,18 @@ CREATE TABLE IF NOT EXISTS auth_rate_limits (
   window_start DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_window_start (window_start)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- === 003: The Conquest campaign progress ===
+-- One row per player and mission that was won at least once; stars only ever go up.
+ALTER TABLE matches ADD COLUMN IF NOT EXISTS mission_id VARCHAR(24) CHARACTER SET ascii COLLATE ascii_bin NULL;
+
+CREATE TABLE IF NOT EXISTS campaign_progress (
+  player_id BIGINT UNSIGNED NOT NULL,
+  mission_id VARCHAR(24) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  stars TINYINT UNSIGNED NOT NULL,
+  first_cleared_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (player_id, mission_id),
+  CONSTRAINT fk_campaign_player FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE,
+  CONSTRAINT chk_campaign_stars CHECK (stars BETWEEN 1 AND 3)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

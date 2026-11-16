@@ -8,6 +8,7 @@ import './conquest.css';
 import { shieldFromGame, cardPortrait, CARD_NAMES } from './screens.js';
 import ART from './art/conquest.json';
 import { BUILD } from './version.js';
+import { account } from './account.js';
 import { ROME } from './campaign/rome.js';
 import { missionById, missionStatus, currentMission, totalStars, starsOf, withResult, sanitizeProgress,
   requirement, GOAL_TEXT, conditionText, MAX_STARS } from './campaign/campaign.js';
@@ -16,22 +17,45 @@ const BASE = import.meta.env.BASE_URL;
 const art = name => `${BASE}assets/art/${name}.webp?v=${BUILD}`;
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-// ---------- Voortgang (nu: dit toestel; serveropslag volgt in een latere stap) ----------
+// ---------- Voortgang ----------
+// Ingelogd: de server (public/api/campaign.php, tabel campaign_progress) is de bron; hier staat een kopie.
+// Gast: alleen op dit toestel (localStorage). Bij inloggen gaat wat je als gast speelde mee naar je account
+// (sterren gaan alleen omhoog, zonder munten). Lukt de server niet, dan valt het terug op dit toestel.
 const STORE = 'lr-conquest-v1';
-function loadProgress() {
+let serverProgress = null;        // { missieId: sterren } van de server, of null (gast / nog niet geladen)
+function localProgress() {
   try { return sanitizeProgress(JSON.parse(localStorage.getItem(STORE))); } catch { return {}; }
 }
-function saveProgress(p) { try { localStorage.setItem(STORE, JSON.stringify(p)); } catch {} }
+function saveLocal(p) { try { localStorage.setItem(STORE, JSON.stringify(p)); } catch {} }
+const onServer = () => account.signedIn && serverProgress !== null;
+function loadProgress() { return onServer() ? serverProgress : localProgress(); }
+
+async function syncWithServer() {
+  if (!account.signedIn) { serverProgress = null; refresh(); return; }
+  try {
+    const local = localProgress();
+    let r = await account.api('GET', 'campaign.php');
+    if (Object.entries(local).some(([id, s]) => (r.progress?.[id] ?? 0) < s)) r = await account.api('POST', 'campaign.php', { import: local });
+    serverProgress = sanitizeProgress(r.progress);
+  } catch (e) { console.warn('campaign progress', e); serverProgress = null; }
+  refresh();
+}
 export const conquest = {
   progress: loadProgress,
-  /** Legt de uitslag van een missie vast. Geeft { stars, best, firstClear, next } terug. */
+  /** Legt de uitslag van een missie vast (direct zichtbaar). Ingelogd bevestigt de server het met `confirm`.
+   *  Geeft { stars, best, firstClear, next } terug. */
   record(missionId, stars) {
     const before = loadProgress(), after = withResult(before, missionId, stars);
-    saveProgress(after);
+    if (onServer()) serverProgress = after; else saveLocal(after);
     const mission = missionById(missionId);
     const main = ROME.missions.filter(x => !x.bonus), i = main.indexOf(mission);
     const next = stars > 0 && i >= 0 && i < main.length - 1 ? main[i + 1].id : null;
     return { stars, best: starsOf(after, missionId), firstClear: starsOf(before, missionId) === 0 && stars > 0, next };
+  },
+  /** Antwoord van match-finish.php: { id, best } is wat de server heeft opgeslagen. */
+  confirm(result) {
+    if (!result?.id || !onServer()) return;
+    serverProgress = withResult(serverProgress, result.id, result.best);
   },
 };
 
@@ -229,6 +253,19 @@ function showTrophy() {
   });
 }
 
+// Opnieuw tekenen als de voortgang van de server binnenkomt terwijl een scherm open is (niet tijdens een missiepaneel).
+function refresh() {
+  if (root.querySelector('.cq-modal')) return;
+  if (current === 'modes') showModes(); else if (current === 'conquest') showConquest();
+}
+// 'lr:session' komt bij elke profielwijziging; alleen ophalen als er een andere speler (of gast) is.
+let syncedFor;
+window.addEventListener('lr:session', () => {
+  const who = account.signedIn ? account.session?.player?.id ?? 'signed-in' : null;
+  if (who === syncedFor) return;
+  syncedFor = who;
+  syncWithServer();
+});
 window.addEventListener('lr:open', e => { if (['modes', 'conquest', 'trophy'].includes(e.detail)) go(e.detail); });
 window.addEventListener('lr:battle', close);
 export const conquestScreens = { isOpen: () => current !== null, close };
