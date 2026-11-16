@@ -10,7 +10,7 @@ import { BUILD } from './version.js';
 const BASE = import.meta.env.BASE_URL;
 const avatarUrl = key => `${BASE}assets/avatars/${key}.webp?v=${BUILD}`;
 const cardOf = type => CARDS.find(c => c.type === type);
-const NAMES = { melee: 'Legionary', archer: 'Archer', cannon: 'Cannon', cavalry: 'Cavalry', berserker: 'Berserker',
+export const CARD_NAMES = { melee: 'Legionary', archer: 'Archer', cannon: 'Cannon', cavalry: 'Cavalry', berserker: 'Berserker',
   horse_archer: 'Horse Archer', musket: 'Musketeer', healer: 'Priestess', samurai: 'Samurai', spy: 'Spy',
   firethrower: 'Fire Thrower', p51: 'P-51 Mustang',
   spartan: 'Spartan Guardian', plague: 'Plague Doctor', banner: 'Banner Maiden', flamegi: 'Flamethrower GI', lancer: 'Steppe Lancer', assassin: 'Persian Assassin' };
@@ -157,7 +157,7 @@ async function showDeck() {
       return `<div class="lr-tile ${where === 'deck' && selected === i ? 'sel' : ''} ${where === 'pool' && selected !== null ? 'pick' : ''}"
         data-where="${where}" data-i="${i}" data-type="${type}">
         ${cardImg(type, 112)}<span class="lr-lvl">Lv ${c.level}</span><span class="lr-cost">${cardOf(type).cost}</span>
-        <b>${NAMES[type]}</b>${frag}
+        <b>${CARD_NAMES[type]}</b>${frag}
         ${where === 'pool' || where === 'deck' ? (cost ? `<button class="lr-up ${can ? '' : 'off'}" data-up="${type}" title="Upgrade">▲ ${cost[1]} 🪙</button>` : '') : ''}
       </div>`;
     };
@@ -185,7 +185,7 @@ async function showDeck() {
         busy(b, async () => {
           const r = await account.api('POST', 'card-upgrade.php', { card: b.dataset.up });
           account.profile.cards = r.cards;
-          toast(`${NAMES[b.dataset.up]} upgraded to level ${r.cards[b.dataset.up].level}!`);
+          toast(`${CARD_NAMES[b.dataset.up]} upgraded to level ${r.cards[b.dataset.up].level}!`);
           for (const a of r.achievements ?? []) toast(`🏆 ${a.title}`, 3500);
           render();
         });
@@ -248,7 +248,7 @@ window.addEventListener('lr:session', () => {
 const artUrl = name => `${BASE}assets/art/${name}.webp?v=${BUILD}`;
 // Beloningskaart: ons kaartportret in de goudlijst (result-card.webp, portretgat doorzichtig).
 // Portret schaalt mee met de lijst (procenten), ingezoomd zodat de eigen kaartrand en het energiejuweel wegvallen.
-function cardPortrait(type) {
+export function cardPortrait(type) {
   const a = CARD_ART.cards[type], fw = CARD_ART.frameWidth, n = Object.keys(CARD_ART.cards).length;
   const px = (a.frame * fw + (fw - a.width) / 2) / (n * fw - a.width) * 100;
   return `<span class="lr-portrait" style="aspect-ratio:${a.width}/${CARD_ART.frameHeight};
@@ -258,15 +258,22 @@ const SHORT = { horse_archer: 'Horse Archer', firethrower: 'Fire Thrower', spart
   banner: 'Banner Maiden', flamegi: 'Flamethrower', lancer: 'Lancer', assassin: 'Assassin', p51: 'P-51' };
 function rewardCard(type, text) {
   return `<div class="lr-rcard"><span class="lr-rcard-art">${cardPortrait(type)}</span>
-    <img src="${artUrl('result-card')}" alt=""><b>${esc(SHORT[type] ?? NAMES[type])}</b><i>${text}</i></div>`;
+    <img src="${artUrl('result-card')}" alt=""><b>${esc(SHORT[type] ?? CARD_NAMES[type])}</b><i>${text}</i></div>`;
 }
 const artButton = (id, label, small) => `<button class="lr-bigbtn${small ? ' small' : ''}" id="${id}">
   <img src="${artUrl(small ? 'result-button-small' : 'result-button')}" alt=""><span>${label}</span></button>`;
-function showResult({ winner, reward, error, guest }) {
+function showResult({ winner, reward, error, guest, mission }) {
   const win = winner === 'blue';
+  // Campagnemissie: sterren onder de banier; de knoppen gaan naar de kaart.
+  const star = i => `<img src="${artUrl(i < (mission?.stars ?? 0) ? 'star-full' : 'star-empty')}" alt="">`;
+  const missionHtml = mission ? `<div class="lr-mission-result"><small>Mission ${esc(mission.n)} · ${esc(mission.title)}</small>
+    <span class="cq-stars">${star(0)}${star(1)}${star(2)}</span></div>` : '';
+  const labels = mission ? (win ? ['Continue', 'Retry'] : ['Try again', 'Map']) : [win ? 'Play again' : 'Try again', 'Menu'];
+  const primaryGoes = mission && win ? 'lr:to-menu' : 'lr:again', secondaryGoes = mission && win ? 'lr:again' : 'lr:to-menu';
   const frags = Object.entries(reward?.fragments ?? {});
   open('result', `
     <div class="lr-banner ${win ? 'win' : 'loss'}"><img src="${artUrl('result-banner')}" alt=""><span>${win ? 'VICTORY' : 'DEFEAT'}</span></div>
+    ${missionHtml}
     ${reward ? `
       <div class="lr-ribbon"><img src="${artUrl('result-ribbon')}" alt="Battle rewards"></div>
       <div class="lr-rrow">
@@ -278,12 +285,12 @@ function showResult({ winner, reward, error, guest }) {
       ${reward.level > reward.levelBefore ? `<p class="lr-levelup">⭐ Level up! You reached level ${reward.level} (+${100 * (reward.level - reward.levelBefore)} 🪙)</p>` : ''}
       ${(reward.achievements ?? []).map(a => `<p class="lr-ach-new">🏆 <b>${esc(a.title)}</b> — ${esc(a.description)}</p>`).join('')}`
     : `<p class="lr-muted lr-noreward">${guest ? 'Sign in to earn XP, coins and card fragments.' : esc(error || 'No rewards for this battle.')}</p>`}
-    <div class="lr-result-actions">${artButton('lr-again', win ? 'Play again' : 'Try again')}${artButton('lr-menu', 'Menu', true)}</div>`, el => {
+    <div class="lr-result-actions">${artButton('lr-again', labels[0])}${artButton('lr-menu', labels[1], true)}</div>`, el => {
     el.querySelector('.lr-close').remove();
     // Eerste halve seconde negeren: een tik die nog voor het gevecht bedoeld was, telt niet.
     const go = ev => () => { if (performance.now() - openedAt < 600) return; close(); window.dispatchEvent(new Event(ev)); };
-    el.querySelector('#lr-again').onclick = go('lr:again');
-    el.querySelector('#lr-menu').onclick = go('lr:to-menu');
+    el.querySelector('#lr-again').onclick = go(primaryGoes);
+    el.querySelector('#lr-menu').onclick = go(secondaryGoes);
   });
   const scr = root.querySelector('.lr-screen');
   scr.style.setProperty('--result-bg', `url(${artUrl('result-bg')})`);
@@ -306,7 +313,7 @@ window.addEventListener('lr:open', e => ({ profile: () => showProfile(), achieve
   deck: showDeck, friends: showFriends })[e.detail]?.());
 window.addEventListener('lr:result', e => {
   try { showResult(e.detail); }
-  catch (err) { console.error('result screen', err); showResult({ winner: e.detail.winner, error: 'Rewards could not be shown.' }); }
+  catch (err) { console.error('result screen', err); showResult({ winner: e.detail.winner, mission: e.detail.mission, error: 'Rewards could not be shown.' }); }
 });
 window.addEventListener('lr:battle', () => { if (current && current !== 'result') close(); });
 export const screens = { toast, isOpen: () => current !== null };

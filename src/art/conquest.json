@@ -1,0 +1,58 @@
+{
+ "mode-conquest": {
+  "width": 760,
+  "height": 566,
+  "plate": {
+   "left": 17.5,
+   "top": 81.45,
+   "width": 65.13,
+   "height": 16.61
+  }
+ },
+ "mode-trophy": {
+  "width": 760,
+  "height": 566,
+  "plate": {
+   "left": 16.71,
+   "top": 81.45,
+   "width": 66.84,
+   "height": 15.55
+  }
+ },
+ "mode-ranked": {
+  "width": 760,
+  "height": 492,
+  "plate": {
+   "left": 16.45,
+   "top": 77.24,
+   "width": 67.5,
+   "height": 20.93
+  }
+ },
+ "map": {
+  "width": 5430,
+  "height": 841,
+  "tiles": 3,
+  "tileWidth": 1810,
+  "segmentWidth": 1870,
+  "segmentStep": 1780
+ },
+ "mission-panel": {
+  "width": 1200,
+  "height": 793,
+  "inner": {
+   "left": 24.17,
+   "top": 39.6,
+   "width": 50.67,
+   "height": 39.34
+  }
+ },
+ "scroll": {
+  "width": 1000,
+  "height": 329
+ },
+ "trophy-road": {
+  "width": 724,
+  "height": 2172
+ }
+}

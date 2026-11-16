@@ -23,6 +23,7 @@ Open de lokale URL van Vite. Voor een productiebuild: `npm run build`. Tests: `n
 - Eenvoudige computergestuurde tegenstander; wedstrijd van maximaal vier minuten.
 - Energie vult zichzelf aan; in de laatste minuut sneller.
 - Herstart na de wedstrijd via de knop, of met R.
+- **Choose Your Mode** (v0.18): The Conquest — campagne "Rise of Rome" met 25 missies + 2 bonusmissies op een scrollende kaart, sterren en missiedoelen — en een vooruitblik op Trophy Road (PvP bestaat nog niet).
 
 ## Belangrijke beperkingen
 

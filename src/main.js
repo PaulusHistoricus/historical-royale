@@ -2,8 +2,10 @@ import Phaser from 'phaser';
 import './style.css';
 import './auth.js';
 import './screens.js';
+import { conquest } from './conquest.js';
+import { missionRules, enemyLevels, starsFor, GOAL_TEXT } from './campaign/campaign.js';
 import { account } from './account.js';
-import { W, LANES, FIELD_BOTTOM, CARDS, MATCH_SECONDS, ENERGY_MAX } from './sim/config.js';
+import { W, LANES, FIELD_BOTTOM, CARDS, ENERGY_MAX } from './sim/config.js';
 import * as sim from './sim/battle.js';
 import { createHand, playFromHand, HAND_SIZE } from './sim/hand.js';
 import UNIT_ART from './art/units.json';
@@ -65,6 +67,10 @@ const SFX = {   // groep -> [bestanden, volume, minimale tijd tussen twee keer (
 };
 const FEMALE = new Set(['healer', 'spy', 'banner', 'assassin']);
 let autoFullscreenDone = false;
+// De campagnemissie van het komende/lopende gevecht (null = los gevecht). Gezet door 'lr:start'
+// (src/conquest.js); blijft staan bij 'opnieuw', zodat je dezelfde missie herkanst.
+let activeMission = null;
+let reopenConquest = false;         // na een missie terug naar de kaart in plaats van het kale menu
 
 // Levend vuur bovenop de geschilderde schadestadia: [x, y, grootte, soort] in framepixels
 // (tower 128x180, castle 333x404), per stadium 0..4. Soort: vuur (standaard), 'torch' of 'smoke'.
@@ -188,11 +194,12 @@ class Boot extends Phaser.Scene {
 }
 
 // Hoofdmenu, opgebouwd uit losse elementen zodat het op elk scherm past.
-// Alleen Spelen werkt; de rest toont "binnenkort".
+// Spelen opent de moduskeuze (The Conquest / Trophy Road), de zwaarden starten een los gevecht.
 class Menu extends Phaser.Scene {
   constructor() { super('menu'); }
 
   create() {
+    this.starting = false;
     window.dispatchEvent(new Event('lr:menu'));
     playMusic(this, MUSIC.menu);
     this.bg = this.add.image(0, 0, 'menu-bg');
@@ -205,7 +212,7 @@ class Menu extends Phaser.Scene {
       const img = this.add.image(0, 0, key).setInteractive({ useHandCursor: true });
       img.on('pointerover', () => img.setTint(0xfff0c8));
       img.on('pointerout', () => img.clearTint());
-      const actions = [() => this.play(), null, () => openScreen('friends'), () => this.toggleSound()];
+      const actions = [() => openScreen('modes'), () => this.play(null), () => openScreen('friends'), () => this.toggleSound()];
       img.on('pointerdown', () => this.press(img, actions[i]));
       return img;
     });
@@ -221,7 +228,11 @@ class Menu extends Phaser.Scene {
     this.bellDot = this.add.circle(0, 0, 9, 0xd8342a).setStrokeStyle(2, 0xffe6a6).setVisible(false);
     const onFriends = e => this.bellDot?.setVisible(e.detail.incoming.length > 0);
     window.addEventListener('lr:friends', onFriends);
-    this.events.once('shutdown', () => window.removeEventListener('lr:friends', onFriends));
+    // Moduskeuze / The Conquest (src/conquest.js) starten een gevecht met 'lr:start'.
+    const onStart = e => this.play(e.detail?.mission ?? null);
+    window.addEventListener('lr:start', onStart);
+    this.events.once('shutdown', () => { window.removeEventListener('lr:friends', onFriends); window.removeEventListener('lr:start', onStart); });
+    if (reopenConquest) { reopenConquest = false; openScreen('conquest'); }
     this.toast = this.add.text(0, 0, '', { fontFamily: FONT, fontStyle: 'bold', color: '#fff4d6', stroke: '#2a1d10',
       backgroundColor: '#1b130bcc', padding: { x: 14, y: 8 } }).setOrigin(0.5).setDepth(10).setAlpha(0);
     // Installeren: knop alleen als het kan (Android/desktop) of als uitleg nodig is (iPhone/iPad).
@@ -276,7 +287,10 @@ class Menu extends Phaser.Scene {
     this.tweens.add({ targets: this.toast, alpha: 0, delay: 1100, duration: 400 });
   }
 
-  play() {
+  play(mission = null) {
+    if (this.starting) return;
+    this.starting = true;
+    activeMission = mission;
     // Op telefoons: schermvullend en liggend, de fijnste manier om te spelen.
     // Eén keer per bezoek automatisch: de browser toont bij elke keer volledig scherm een melding.
     if (this.sys.game.device.input.touch && this.scale.fullscreen.available && !document.fullscreenElement && !autoFullscreenDone) {
@@ -343,15 +357,21 @@ class Battle extends Phaser.Scene {
     this.texts = [];
     // Kaartniveaus en deck uit het account (gasten: alles niveau 1, lokaal deck).
     // De computer speelt op het gemiddelde niveau van jouw deck, zodat het eerlijk blijft.
+    // In een campagnemissie bepaalt de missie het niveau, het deck en de regels van de computer.
+    const mission = this.mission = activeMission;
     const levels = account.cardLevels(), deckTypes = account.deckTypes();
     const aiLevel = Math.round(deckTypes.reduce((a, t) => a + levels[t], 0) / deckTypes.length);
-    this.state = createBattle({ cardLevels: { blue: levels, red: Object.fromEntries(CARDS.map(c => [c.type, aiLevel])) } });
+    this.state = createBattle({
+      cardLevels: { blue: levels, red: mission ? enemyLevels(mission) : Object.fromEntries(CARDS.map(c => [c.type, aiLevel])) },
+      rules: mission ? missionRules(mission) : null,
+    });
     this.accumulator = 0;
     this.selected = null;          // gekozen vak in de hand (0..3), of null
     this.hand = createHand(account.deckIndices(), this.state.rng);
     this.stats = { unitsDeployed: 0, towersDestroyed: 0 };
     this.matchStart = account.signedIn ? account.api('POST', 'match-start.php', {}).catch(() => null) : Promise.resolve(null);
-    const again = () => this.scene.restart(), toMenu = () => this.scene.start('menu');
+    const again = () => this.scene.restart();
+    const toMenu = () => { reopenConquest = !!this.mission; this.scene.start('menu'); };
     window.addEventListener('lr:again', again); window.addEventListener('lr:to-menu', toMenu);
     this.events.once('shutdown', () => { window.removeEventListener('lr:again', again); window.removeEventListener('lr:to-menu', toMenu); });
     this.views = new Map();        // eenheid-id -> { sprite, type, lockUntil, flashUntil }
@@ -402,7 +422,8 @@ class Battle extends Phaser.Scene {
     });
     // Aftelling: het veld is zichtbaar, maar de simulatie (energie, AI, eenheden) staat stil.
     this.countdown = DEBUG && new URLSearchParams(location.search).has('nowait') ? 0 : COUNTDOWN;
-    if (this.countdown > 0) this.message.setText('Look at the battlefield…');
+    this.goalText = mission ? GOAL_TEXT[mission.goal](mission) : null;
+    if (this.countdown > 0) this.message.setText(this.goalText ?? 'Look at the battlefield…');
     this.countText = this.add.text(W / 2, FIELD_BOTTOM / 2 - 20, '', textStyle(64, '#ffe08a', { strokeThickness: 10 }))
       .setOrigin(0.5).setDepth(2500);
     this.texts.push(this.countText);
@@ -786,6 +807,11 @@ class Battle extends Phaser.Scene {
     this.resultShown = true;
     this.selected = null;
     const detail = { winner, guest: !account.signedIn };
+    if (this.mission) {
+      // Sterren en vrijspelen: regels in src/campaign/campaign.js, opslag in src/conquest.js.
+      const result = conquest.record(this.mission.id, starsFor(this.mission, this.state));
+      detail.mission = { id: this.mission.id, n: this.mission.n, title: this.mission.title, ...result };
+    }
     // Nooit blijven hangen op het netwerk: na 8 s tonen we de uitslag hoe dan ook.
     const timeout = (p, ms) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('Server did not respond — rewards will not be counted for this battle.')), ms))]);
     const match = await timeout(this.matchStart, 4000).catch(() => null);
@@ -814,7 +840,7 @@ class Battle extends Phaser.Scene {
         this.countSub.setVisible(false);
         this.countText.setText('FIGHT!').setScale(1.4);
         this.tweens.add({ targets: this.countText, scale: 1, alpha: 0, delay: 500, duration: 500 });
-        this.message.setText('Choose a card, then select a blue lane');
+        this.message.setText(this.goalText ?? 'Choose a card, then select a blue lane');
       }
     } else {
       this.accumulator += dt;
@@ -1204,8 +1230,9 @@ class Battle extends Phaser.Scene {
       c.lvl.setPosition(lx - 2, ly).setAlpha(affordable ? 1 : 0.6);
     });
 
-    const left = Math.max(0, MATCH_SECONDS - s.time);
-    this.header.setText(`LEGION ROYALE   ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}   ${VERSION_LABEL}`);
+    const left = Math.max(0, s.rules.timeLimit - s.time);
+    const name = this.mission ? `${this.mission.n}. ${this.mission.title.toUpperCase()}` : 'LEGION ROYALE';
+    this.header.setText(`${name}   ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}   ${VERSION_LABEL}`);
   }
 
   drawDebug() {
