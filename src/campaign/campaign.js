@@ -38,6 +38,13 @@ export function totalStars(progress, world = ROME) {
   return world.missions.reduce((sum, x) => sum + starsOf(progress, x.id), 0);
 }
 
+/** Arena (textuursleutel) van een missie: eigen keuze, anders die van het gebied op de kaart. */
+export function arenaFor(mission) {
+  if (mission.arena) return mission.arena;
+  const world = WORLDS.find(w => w.missions.includes(mission));
+  return world?.arenas?.[mission.seg - 1] ?? 'arena';
+}
+
 /** Missie -> regels voor createBattle({ rules }). */
 export function missionRules(mission) {
   const e = mission.enemy, p = mission.player ?? {};

@@ -4,13 +4,14 @@ import './auth.js';
 import './screens.js';
 import { conquest } from './conquest.js';
 import './guide.js';
-import { missionRules, enemyLevels, starsFor, GOAL_TEXT } from './campaign/campaign.js';
+import { missionRules, enemyLevels, starsFor, GOAL_TEXT, arenaFor } from './campaign/campaign.js';
 import { account } from './account.js';
 import { W, LANES, FIELD_BOTTOM, CARDS, ENERGY_MAX } from './sim/config.js';
 import * as sim from './sim/battle.js';
 import { createHand, playFromHand, HAND_SIZE } from './sim/hand.js';
 import UNIT_ART from './art/units.json';
 import WORLD_ART from './art/world.json';
+import ARENA_ART from './art/arenas.json';
 import CARD_ART from './art/cards.json';
 import BAR_ART from './art/cardbar.json';
 import FX_ART from './art/effects.json';
@@ -156,6 +157,7 @@ class Boot extends Phaser.Scene {
   preload() {
     this.load.on('progress', p => window.__splash?.progress(p));
     this.load.image('arena', art('arena.jpg'));
+    for (const key of Object.keys(ARENA_ART)) this.load.image(key, art(key + '.jpg'));   // campagne-arena's
     for (const def of Object.values(UNIT_ART)) {
       for (const key of def.textures) {
         this.load.spritesheet(key, art(key + '.png'), { frameWidth: def.frameWidth, frameHeight: def.frameHeight });
@@ -400,7 +402,11 @@ class Battle extends Phaser.Scene {
     if (DEBUG) window.__HR__ = { scene: this, state: this.state, sim, cards: CARDS };
 
     this.backdrop = this.add.graphics().setDepth(-20);   // vult de ruimte rond veld en balk
-    this.add.image(0, 0, 'arena').setOrigin(0, 0).setScale(W / WORLD_ART.arena.width).setDepth(-10);
+    // Campagne: de arena van het gebied; los gevecht: willekeurig, voor wat afwisseling.
+    const arenas = ['arena', ...Object.keys(ARENA_ART)];
+    const arenaKey = this.mission ? arenaFor(this.mission) : arenas[Math.floor(Math.random() * arenas.length)];
+    const arena = this.textures.exists(arenaKey) ? arenaKey : 'arena';
+    this.add.image(0, 0, arena).setOrigin(0, 0).setScale(W / (ARENA_ART[arena] ?? WORLD_ART.arena).width).setDepth(-10);
     this.drawDeployZones();
     this.structureViews = this.state.structures.map(s => {
       const def = WORLD_ART[s.kind];

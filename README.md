@@ -25,6 +25,7 @@ Open de lokale URL van Vite. Voor een productiebuild: `npm run build`. Tests: `n
 - Herstart na de wedstrijd via de knop, of met R.
 - **Choose Your Mode** (v0.18): The Conquest — campagne "Rise of Rome" met 25 missies + 2 bonusmissies op een scrollende kaart, sterren en missiedoelen — en een vooruitblik op Trophy Road (PvP bestaat nog niet).
 - **Rondleiding** (v0.19): zes gidsen (de Vaandelmaagd voorop) leggen het menu, de modi, de campagne en het eerste gevecht uit; opnieuw via **? Tour**.
+- **Arena's per gebied** (v0.20): Latium speelt in de klassieke arena, The Frontier bij zonsondergang en Rome voor de stadsmuur; een los gevecht kiest er willekeurig een.
 
 ## Belangrijke beperkingen
 
