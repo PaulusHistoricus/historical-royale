@@ -117,6 +117,11 @@ Een nieuwe kaart is één regel in `CARDS` (met `radius` en rand-tot-rand `range
 - Seen state: `localStorage 'lr-guide'` (`{ tour, battle }`), per device.
 - Art: `art/source/gids-*.png` -> `public/assets/art/guide-*.webp` via `tools/art/guides.py` (also run by `build.py`). The sources have a reddish fringe; only the solid figure is kept. `gids-banner-assassin.png` holds two figures.
 
+## Campaign arenas (v0.20.0)
+
+- Three arena backgrounds: `arena` (classic, from `world.py`), `arena-sunset` (countryside, aqueduct) and `arena-rome` (city wall, Colosseum). Region -> arena in `ROME.arenas` (`src/campaign/rome.js`); a mission may set its own `arena`. `arenaFor(mission)` in `campaign.js`. A quick battle picks one at random.
+- `tools/art/arenas.py` (also run by `build.py`): `art/source/arena-*.png` -> `public/assets/art/arena-*.jpg` (1920 x 620, same as `arena.jpg`) + `src/art/arenas.json`. The simulation is fixed (lanes at y 123/221), so the sources are warped vertically: above the top lane and below the bottom lane the scale is unchanged, only the strip between the lanes is compressed (PCHIP curve). Lane centres per source are in `ARENAS`; `--check` draws the lanes over the result. A new arena needs two clear horizontal lanes and no painted towers/castles.
+
 ## Ready-made upload folder
 
 The Cloud86 workflow also force-pushes the packaged `public/` + `private/` to the branch **`cloud86-build`** (one commit, no history; source branch and commit in the message). `private/` only holds `legionroyale.example.php` and a README, never real credentials. Fetch it with `git fetch --depth=1 origin cloud86-build`.

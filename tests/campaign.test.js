@@ -6,8 +6,9 @@ import { CARDS, MATCH_SECONDS, OVERTIME_AT, ENERGY_START, ENERGY_MAX, LANES, DEP
 import { CARD_TYPES } from '../src/progression.js';
 import { ROME } from '../src/campaign/rome.js';
 import { WORLDS, allMissions, missionById, requirement, isUnlocked, missionStatus, currentMission, totalStars,
-  missionRules, enemyLevels, conditionMet, starsFor, withResult, sanitizeProgress, conditionText, GOAL_TEXT } from '../src/campaign/campaign.js';
+  missionRules, enemyLevels, conditionMet, starsFor, withResult, sanitizeProgress, conditionText, GOAL_TEXT, arenaFor } from '../src/campaign/campaign.js';
 import MAP from '../src/art/conquest.json' with { type: 'json' };
+import ARENAS from '../src/art/arenas.json' with { type: 'json' };
 import { TICK } from './helpers.js';
 
 const idx = type => CARDS.findIndex(c => c.type === type);
@@ -237,4 +238,15 @@ test('alle 27 missies lopen tot een einde zonder vastlopers (willekeurige speler
     assert.ok(starsFor(mission, s) >= (s.winner === 'blue' ? 1 : 0));
   }
   assert.equal(WORLDS.length, 1);
+});
+
+test('elke missie speelt in een bestaande arena; elk gebied heeft er een', () => {
+  const known = new Set(['arena', ...Object.keys(ARENAS)]);
+  assert.equal(ROME.arenas.length, ROME.regions.length);
+  for (const x of allMissions()) assert.ok(known.has(arenaFor(x)), `${x.id}: onbekende arena ${arenaFor(x)}`);
+  assert.equal(arenaFor(missionById('rome_001')), 'arena');
+  assert.equal(arenaFor(missionById('rome_012')), 'arena-sunset');
+  assert.equal(arenaFor(missionById('rome_025')), 'arena-rome');
+  assert.equal(arenaFor({ ...missionById('rome_001'), arena: 'arena-rome' }), 'arena-rome');
+  for (const a of Object.values(ARENAS)) assert.deepEqual(a, { width: 1920, height: 620 }, 'zelfde maat als arena.jpg');
 });

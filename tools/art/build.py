@@ -19,6 +19,7 @@ from avatars import build_avatars
 from victory import build_victory
 from conquest import build_conquest
 from guides import build_guides
+from arenas import build_arenas
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 SRC = os.path.join(ROOT, 'art', 'source') + '/'
@@ -34,6 +35,7 @@ build_avatars(SRC, os.path.join(ROOT, 'public', 'assets'))
 build_victory(SRC, OUT)
 build_conquest(SRC, OUT, os.path.join(ROOT, 'src', 'art', 'conquest.json'))
 build_guides(SRC, OUT)
+build_arenas(SRC, OUT, os.path.join(ROOT, 'src', 'art', 'arenas.json'))
 build_reference(OUT, os.path.join(ROOT, 'src', 'art', 'units.json'), os.path.join(ROOT, 'art', 'reference'))
 for f in sorted(os.listdir(OUT)):
     print(f'{f:24s} {os.path.getsize(os.path.join(OUT, f)) // 1024:5d} kB')

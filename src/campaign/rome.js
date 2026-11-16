@@ -19,6 +19,9 @@ export const ROME = {
   id: 'rome',
   title: 'RISE OF ROME',
   regions: ['Latium', 'The Frontier', 'Rome'],
+  // Arena per gebied (textuursleutels: 'arena' = de klassieke arena, de rest uit src/art/arenas.json).
+  // Een missie kan dit overschrijven met `arena: '<sleutel>'`.
+  arenas: ['arena', 'arena-sunset', 'arena-rome'],
   missions: [
     // --- Segment 1: Latium ---
     m(1, 'First Steps', 1, 110, 395, 'castle', 240, { deck: ['melee'], level: 1, tempo: 0.5 },
