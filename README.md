@@ -27,6 +27,7 @@ Open de lokale URL van Vite. Voor een productiebuild: `npm run build`. Tests: `n
 - **Rondleiding** (v0.19): zes gidsen (de Vaandelmaagd voorop) leggen het menu, de modi, de campagne en het eerste gevecht uit; opnieuw via **? Tour**.
 - **Arena's per gebied** (v0.20): Latium speelt in de klassieke arena, The Frontier bij zonsondergang en Rome voor de stadsmuur; een los gevecht kiest er willekeurig een.
 - **Campagne in de database** (v0.21): ingelogd worden je sterren op de server bewaard (`campaign_progress`, migratie 003) en krijg je munten voor elke nieuwe ster; als gast blijven ze op je toestel en gaan ze mee zodra je inlogt.
+- **Gidsen met een naam en soorten eenheden** (v0.22): Aurélie, Marcus, Kenji, Parisa, Meret en James; elke kaart toont of hij Bio, Mechanical of Special is, met zijn vaardigheid.
 
 ## Belangrijke beperkingen
 

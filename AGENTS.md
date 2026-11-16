@@ -110,7 +110,7 @@ Een nieuwe kaart is één regel in `CARDS` (met `radius` en rand-tot-rand `range
 ## Guides and guided tour (v0.19.0)
 
 - `src/guide.js` + `src/guide.css`: six guides explain the game in a speech bubble; the rest of the screen dims and the part being explained gets a golden frame. Same idea as Relic Slide's `gids.js`. Player-facing text is English.
-- Cast (key -> art): `banner` Banner Maiden (leads the tour), `centurion`, `samurai` Shadow Samurai, `assassin` Persian Assassin, `priestess`, `pilot` P-51 Pilot.
+- Cast (key -> name · subtitle, v0.22): `banner` Aurélie · Banner Maiden (leads the tour), `centurion` Marcus · Centurion, `samurai` Kenji · Shadow Samurai, `assassin` Parisa · Persian Assassin, `priestess` Meret · Priestess, `pilot` James · P-51 Pilot. Invented names only, never well-known historical people.
 - **Tour** (`TOUR`): menu -> mode selection -> campaign map -> deck, achievements, friends, sign-in -> how a battle works. Offered once on the first visit to the menu; again via **? Tour** in the menu or on the mode screen (`lr:open` detail `tour`, or `lrGuide.start()` in the console).
 - **First battle** (`BATTLE`): cards, lanes, energy, pause. While a guide is open `window.lrGuideOpen` is true and the battle (including the countdown) waits.
 - Targets: a CSS selector, or `canvas:<key>` for something Phaser draws. `src/main.js` exposes those positions through `window.lrCanvasRect(key)` (menu: `play`, `battle`, `team`, `settings`, `trophy`, `decks`, `gift`, `bell`; battle: `cards`, `lanes`, `energy`, `pause`) using `screenRect()`.
@@ -130,6 +130,11 @@ Een nieuwe kaart is één regel in `CARDS` (met `radius` en rand-tot-rand `range
 - `campaign.php`: GET returns `{ progress }`; POST `{ import: { missionId: stars } }` carries guest progress from this device into the account: stars only go up, unknown ids are ignored, no coins.
 - Browser (`src/conquest.js`): signed in -> progress comes from the server (cached in memory, re-fetched only when the signed-in player changes); guest -> localStorage. On sign-in, local stars the server does not have yet are imported. If the server cannot be reached the map falls back to the device copy; locked missions then start without rewards.
 - Deploying: run `003_campaign_progress.sql` once in phpMyAdmin on an existing database (see `docs/auth-deployment.md`). Without it, `match-start.php` fails and battles give no rewards (the game itself still works).
+
+## Unit kinds (v0.22.0)
+
+- `src/unit-info.js`: `unitKinds(type)` -> `['Bio'|'Mechanical', 'Special'?]` (from `material` and `role: 'special'` in `CARDS`) and `ABILITY[type]` (one short English line). Shown as chips + ability on deck tiles (`screens.js`) and as a B/M/S badge with a hover text on the enemy cards in the mission panel (`conquest.js`). A new card needs an `ABILITY` line (`tests/unit-info.test.js`).
+- Rules tied to the kind (`src/sim/battle.js`): poison, healing, Shield Wall, Rally aura and the Spy only affect Bio; Mechanical takes 15 % less from normal attacks and 25 % more from siege.
 
 ## Ready-made upload folder
 
