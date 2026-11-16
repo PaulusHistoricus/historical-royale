@@ -169,3 +169,10 @@
 .lr-bigbtn.small span { left: 10%; right: 10%; top: 14%; bottom: 14%; font-size: 1.9cqw; }
 .lr-bigbtn:hover { filter: brightness(1.12); transform: translateY(-1px); } .lr-bigbtn:active { transform: translateY(1px); }
 .lr-xpgain { font-style: normal; font-weight: bold; color: #c9a8ff; text-shadow: 0 1px 2px #000; }
+
+/* Soort eenheid (src/unit-info.js): Bio, Mechanical, Special */
+.lr-kinds { display: flex; flex-wrap: wrap; justify-content: center; gap: 3px; margin: 2px 0 1px; }
+.lr-kind { padding: 1px 6px; border-radius: 8px; font: bold 9.5px/1.4 system-ui, sans-serif; letter-spacing: .04em; text-transform: uppercase; color: #fff; }
+.lr-kind.bio { background: #3f7a3a; } .lr-kind.mechanical { background: #5a6470; } .lr-kind.special { background: #7b3fa0; }
+.lr-ability { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin: 1px 2px 3px;
+  font: 400 10px/1.25 Georgia, serif; font-style: normal; color: #e9d3a3; text-align: center; }

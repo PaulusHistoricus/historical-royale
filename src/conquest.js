@@ -9,6 +9,7 @@ import { shieldFromGame, cardPortrait, CARD_NAMES } from './screens.js';
 import ART from './art/conquest.json';
 import { BUILD } from './version.js';
 import { account } from './account.js';
+import { ABILITY, unitKinds } from './unit-info.js';
 import { ROME } from './campaign/rome.js';
 import { missionById, missionStatus, currentMission, totalStars, starsOf, withResult, sanitizeProgress,
   requirement, GOAL_TEXT, conditionText, MAX_STARS } from './campaign/campaign.js';
@@ -206,7 +207,7 @@ function showMission(mission) {
             <ul class="cq-conds">${mission.stars.map((c, i) => `<li class="${i < best ? 'got' : ''}"><img src="${art(i < best ? 'star-full' : 'star-empty')}" alt="">${esc(conditionText(c))}</li>`).join('')}</ul>
           </div>
           <div><h3>Enemy · Level ${mission.enemy.level}</h3>
-            <div class="cq-enemy${mission.enemy.deck.length > 6 ? ' many' : ''}">${mission.enemy.deck.map(t => `<span title="${esc(CARD_NAMES[t])}">${cardPortrait(t)}</span>`).join('')}</div>
+            <div class="cq-enemy${mission.enemy.deck.length > 6 ? ' many' : ''}">${mission.enemy.deck.map(t => `<span title="${esc(`${CARD_NAMES[t]} · ${unitKinds(t).join(' · ')} — ${ABILITY[t] ?? ''}`)}">${cardPortrait(t)}<em class="cq-kind ${unitKinds(t)[0].toLowerCase()}${unitKinds(t).includes('Special') ? ' special' : ''}">${unitKinds(t).map(k => k[0]).join('')}</em></span>`).join('')}</div>
             ${mission.player?.rate < 1 ? '<p class="cq-warn">Your energy returns more slowly here.</p>' : ''}
             ${mission.enemy.start > 6 ? '<p class="cq-warn">The enemy starts with extra energy.</p>' : ''}
           </div>

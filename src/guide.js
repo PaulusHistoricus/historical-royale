@@ -22,34 +22,35 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const open = name => window.dispatchEvent(new CustomEvent('lr:open', { detail: name }));
 
 // ---------- de zes gidsen ----------
+// Eigen (verzonnen) namen, de eenheid als ondertitel. Geen namen van bekende historische personen.
 const CAST = {
-  banner: { name: 'Banner Maiden', role: 'Your guide' },          // leidt de rondleiding, warm en vastberaden
-  centurion: { name: 'Centurion', role: 'Commander' },             // luid, kort, militair
-  samurai: { name: 'Shadow Samurai', role: 'Duelist' },            // kalm, weinig woorden
-  assassin: { name: 'Persian Assassin', role: 'Scout' },           // snel, een tikje spottend
-  priestess: { name: 'Priestess', role: 'Keeper of the cards' },   // rustig, zorgzaam
-  pilot: { name: 'P-51 Pilot', role: 'Ace' },                      // opgewekt, luchtmachtjargon
+  banner: { name: 'Aurélie', role: 'Banner Maiden' },        // leidt de rondleiding, warm en vastberaden
+  centurion: { name: 'Marcus', role: 'Centurion' },          // luid, kort, militair
+  samurai: { name: 'Kenji', role: 'Shadow Samurai' },        // kalm, weinig woorden
+  assassin: { name: 'Parisa', role: 'Persian Assassin' },    // snel, een tikje spottend
+  priestess: { name: 'Meret', role: 'Priestess' },           // rustig, zorgzaam
+  pilot: { name: 'James', role: 'P-51 Pilot' },              // opgewekt, luchtmachtjargon
 };
 const WHO = Object.keys(CAST);
 
 // ---------- de rondleiding ----------
 const TOUR = [
   { who: 'banner',
-    text: 'Welcome, commander! I am the **Banner Maiden**. In Legion Royale you lead warriors from every age into battle. My companions and I will show you around.' },
+    text: 'Welcome, commander! I am **Aurélie**, the Banner Maiden. In Legion Royale you lead warriors from every age into battle. My companions and I will show you around.' },
   { who: 'centurion', target: 'canvas:play',
-    text: 'Ave! I am the **Centurion**. Every campaign starts here: **Play** opens the mode selection.' },
+    text: 'Ave! I am **Marcus**, centurion of the legion. Every campaign starts here: **Play** opens the mode selection.' },
   { who: 'centurion', target: '.cq-mode.conquest', before: () => open('modes'),
     text: '**The Conquest** is your campaign: 25 missions and two hidden bonus missions on the road to Rome. March with me!' },
   { who: 'samurai', target: '.cq-mode.trophy',
-    text: 'I am the **Shadow Samurai**. On **Trophy Road** you will face other players. Those battles are still being forged; for now you can study the road ahead.' },
+    text: 'I am **Kenji**. On **Trophy Road** you will face other players. Those battles are still being forged; for now you can study the road ahead.' },
   { who: 'assassin', target: '.cq-quick',
-    text: 'The **Persian Assassin**. No time for a campaign? **Quick Battle** is one fight against the computer. The crossed swords in the menu do the same.' },
+    text: '**Parisa**, at your service. No time for a campaign? **Quick Battle** is one fight against the computer. The crossed swords in the menu do the same.' },
   { who: 'centurion', target: ['.cq-node.current', '.cq-node:not(.locked)', '.cq-map'], before: () => open('conquest'),
     text: 'The campaign map. Tap the **glowing medal** for your next mission: its objective, the enemy cards and how to earn **three stars**. Drag the map to look ahead.' },
   { who: 'priestess', target: 'canvas:decks', before: () => conquestScreens.close(),
-    text: 'I am the **Priestess**. Here you build your **deck**: eight cards, four in your hand. Fragments and coins from battles **upgrade** your cards.' },
+    text: 'I am **Meret**. Here you build your **deck**: eight cards, four in your hand. Each card shows if it is **Bio**, **Mechanical** or **Special**: poison, healing and spies only work on Bio. Fragments and coins **upgrade** your cards.' },
   { who: 'pilot', target: 'canvas:trophy',
-    text: 'Pilot reporting! Your **achievements** and **profile** are here: level, XP and your battle record.' },
+    text: '**James** here, roger that! Your **achievements** and **profile** are here: level, XP and your battle record.' },
   { who: 'assassin', target: 'canvas:bell',
     text: '**Friends**. Share your friend code and add allies. A red dot on the bell means someone sent you a request.' },
   { who: 'priestess', target: '#lr-profile',
@@ -173,7 +174,7 @@ function show(step, o) {
   if (all) WHO.forEach(n => { const i = new Image(); i.src = img(n); i.alt = ''; u.all.append(i); });
   else { const i = new Image(); i.src = img(who); i.alt = CAST[who].name; i.className = 'wave'; u.who.append(i); }
   u.name.textContent = all ? 'To battle!' : CAST[who].name;
-  u.role.textContent = all ? 'Your guides' : CAST[who].role;
+  u.role.textContent = all ? WHO.map(n => CAST[n].name).join(' · ') : CAST[who].role;
   rich(u.text, step.text);
   u.steps.textContent = o.count || '';
   u.prev.hidden = !o.prev; u.prev.textContent = o.prev || '';

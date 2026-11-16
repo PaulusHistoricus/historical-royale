@@ -145,3 +145,8 @@
 .lr-mission-result .cq-stars img { width: 6.4cqw; height: 6.4cqw; filter: drop-shadow(0 .4cqw .6cqw #000c); animation: lrDeal .45s backwards; }
 .lr-mission-result .cq-stars img:nth-child(2) { animation-delay: .15s; width: 7.6cqw; height: 7.6cqw; margin-top: -.9cqw; }
 .lr-mission-result .cq-stars img:nth-child(3) { animation-delay: .3s; }
+
+/* Soort op de vijandelijke kaarten in het missiepaneel: B = Bio, M = Mechanical, S = Special */
+.cq-kind { position: absolute; right: 2%; bottom: 2%; min-width: 2.2cqw; padding: 0 .4cqw; border-radius: .6cqw; font: bold 1.5cqw/1.5 system-ui, sans-serif;
+  font-style: normal; text-align: center; color: #fff; background: #3f7a3a; box-shadow: 0 0 0 1px #0008; }
+.cq-kind.mechanical { background: #5a6470; } .cq-kind.special { background: #7b3fa0; }
