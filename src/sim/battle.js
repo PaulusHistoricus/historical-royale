@@ -41,14 +41,44 @@ export function mulberry32(seed) {
   };
 }
 
-export function createBattle({ seed = Date.now(), ai = true, cardLevels = null } = {}) {
+/**
+ * Regels van één gevecht. Zonder argument: het gewone gevecht (alle waarden uit config.js).
+ * Campagnemissies (src/campaign/) geven hier hun afwijkingen op:
+ *   timeLimit    seconden tot het eindsignaal
+ *   goal         'castle'  kasteel verwoesten; bij tijd-op wint wie de meeste gebouwen overhoudt
+ *                'towers'  blauw wint zodra beide rode torens gevallen zijn; tijd-op = verlies
+ *                'survive' blauw wint als het eigen kasteel bij tijd-op nog staat
+ *   energyStart  { blue, red }   startenergie
+ *   energyRate   { blue, red }   factor op de energieaanvoer (1 = normaal)
+ *   aiDeck       kaarttypes die de computer mag spelen (null = alle kaarten)
+ *   aiTempo      factor op het speeltempo van de computer (2 = twee keer zo vaak)
+ */
+export function battleRules(r = {}) {
+  const timeLimit = r.timeLimit ?? MATCH_SECONDS;
+  const aiDeck = r.aiDeck ? r.aiDeck.map(t => CARDS.findIndex(c => c.type === t)) : null;
+  if (aiDeck && (!aiDeck.length || aiDeck.includes(-1))) throw new RangeError('Unknown card type in aiDeck');
+  if (!['castle', 'towers', 'survive'].includes(r.goal ?? 'castle')) throw new RangeError('Unknown goal');
+  return {
+    timeLimit,
+    overtimeAt: r.overtimeAt ?? (r.timeLimit === undefined ? OVERTIME_AT : Math.max(0, timeLimit - (MATCH_SECONDS - OVERTIME_AT))),
+    goal: r.goal ?? 'castle',
+    energyStart: { blue: r.energyStart?.blue ?? ENERGY_START, red: r.energyStart?.red ?? ENERGY_START },
+    energyRate: { blue: r.energyRate?.blue ?? 1, red: r.energyRate?.red ?? 1 },
+    aiDeck,
+    aiTempo: r.aiTempo ?? 1,
+  };
+}
+
+export function createBattle({ seed = Date.now(), ai = true, cardLevels = null, rules = null } = {}) {
+  const battle = battleRules(rules ?? {});
   const state = {
+    rules: battle,
     // Kaartniveaus per kant: { blue: { melee: 3, ... }, red: { ... } }. Ontbreekt = niveau 1.
     cardLevels: cardLevels ?? { blue: {}, red: {} },
     time: 0,
     ended: false,
     winner: null,
-    energy: { blue: ENERGY_START, red: ENERGY_START },
+    energy: { blue: clamp(battle.energyStart.blue, 0, ENERGY_MAX), red: clamp(battle.energyStart.red, 0, ENERGY_MAX) },
     units: [],
     airstrikes: [],
     structures: [],
@@ -222,19 +252,19 @@ export function chooseTarget(state, unit) {
 }
 
 function stepEnergy(state, dt) {
-  const seconds = state.time > OVERTIME_AT ? ENERGY_SECONDS_OVERTIME : ENERGY_SECONDS;
+  const seconds = state.time > state.rules.overtimeAt ? ENERGY_SECONDS_OVERTIME : ENERGY_SECONDS;
   for (const side of ['blue', 'red']) {
     // Grote legers kosten logistiek. Nooit meer dan 30% energiestraf.
     const count = state.units.filter(u => u.side === side && u.hp > 0).length;
     const multiplier = count <= 4 ? 1 : count <= 7 ? 0.9 : count <= 10 ? 0.8 : 0.7;
-    state.energy[side] = clamp(state.energy[side] + dt * multiplier / seconds, 0, ENERGY_MAX);
+    state.energy[side] = clamp(state.energy[side] + dt * multiplier * state.rules.energyRate[side] / seconds, 0, ENERGY_MAX);
   }
 }
 
 function stepAI(state, dt) {
   state.ai.clock -= dt;
   if (state.ai.clock > 0) return;
-  const affordable = CARDS.map((card, i) => i).filter(i => CARDS[i].cost <= state.energy.red);
+  const affordable = (state.rules.aiDeck ?? CARDS.map((card, i) => i)).filter(i => CARDS[i].cost <= state.energy.red);
   if (affordable.length) {
     const index = affordable[Math.floor(state.rng() * affordable.length)];
     const lane = Math.floor(state.rng() * LANES.length);
@@ -244,7 +274,7 @@ function stepAI(state, dt) {
     const x = lo + state.rng() * (zone.max - lo);
     deploy(state, 'red', lane, index, x);
   }
-  state.ai.clock = AI.minDelay + state.rng() * (AI.maxDelay - AI.minDelay);
+  state.ai.clock = (AI.minDelay + state.rng() * (AI.maxDelay - AI.minDelay)) / state.rules.aiTempo;
 }
 
 function structureScore(state, side) {
@@ -560,9 +590,11 @@ export function step(state, dt) {
   }
 
   const fallen = state.structures.filter(s => s.kind === 'castle' && s.hp <= 0);
+  const { goal, timeLimit } = state.rules;
+  const byScore = () => (structureScore(state, 'blue') >= structureScore(state, 'red') ? 'blue' : 'red');
   if (fallen.length === 1) finish(state, other(fallen[0].side));
-  else if (fallen.length === 2 || state.time >= MATCH_SECONDS) {
-    finish(state, structureScore(state, 'blue') >= structureScore(state, 'red') ? 'blue' : 'red');
-  }
+  else if (fallen.length === 2) finish(state, byScore());
+  else if (goal === 'towers' && !state.structures.some(s => s.kind === 'tower' && s.side === 'red' && s.hp > 0)) finish(state, 'blue');
+  else if (state.time >= timeLimit) finish(state, goal === 'survive' ? 'blue' : goal === 'towers' ? 'red' : byScore());
   return state.events;
 }

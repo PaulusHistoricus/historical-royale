@@ -1,0 +1,143 @@
+/* Moduskeuze, The Conquest en Trophy Road (src/conquest.js). Onder het profielbadge (1110) en de
+   profiel-/deckschermen (1150), zodat die ook hier bereikbaar blijven. */
+#lr-conquest { position: relative; z-index: 1090; font-family: Georgia, 'Times New Roman', serif; color: #f6e7c8; }
+.cq-screen { position: fixed; inset: 0; overflow: hidden; background: #120c08; user-select: none; -webkit-user-select: none;
+  --u: min(1vw, 1.78vh); }                       /* 1 % van een 16:9-vlak dat altijd in het scherm past */
+.cq-bg { position: absolute; inset: 0; background: center / cover no-repeat; filter: brightness(.42) saturate(.9); }
+.cq-screen button { font-family: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+
+.cq-back { position: absolute; left: max(12px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom)); z-index: 5;
+  min-height: 44px; padding: 8px 20px 8px 14px; border-radius: 12px; border: 2px solid #d9a85a; font: bold 16px Georgia, serif; color: #ffe6a6;
+  background: linear-gradient(180deg, #6b4a28, #2a1b0e); box-shadow: 0 3px 0 #120a05, 0 6px 16px #000a; }
+.cq-back:hover { filter: brightness(1.15); }
+
+/* ---------- Choose Your Mode ---------- */
+.cq-screen[data-screen='modes'] { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--u) * .8); }
+.cq-title { position: relative; width: calc(var(--u) * 34); flex: none; }
+.cq-title img { display: block; width: 100%; height: auto; filter: drop-shadow(0 6px 12px #000a); }
+.cq-title h1 { position: absolute; inset: 0 12% 0 16%; margin: 0; display: grid; place-items: center; font-size: calc(var(--u) * 2.2);
+  letter-spacing: .08em; white-space: nowrap; color: #5a2a0c; text-shadow: 0 1px 0 #fff3cf99; }
+.cq-modes, .cq-modes-low { position: relative; display: flex; gap: calc(var(--u) * 3); align-items: flex-start; justify-content: center; flex: none; }
+.cq-modes-low { align-items: center; }
+.cq-mode { position: relative; width: calc(var(--u) * 31); padding: 0; border: 0; background: none; transition: transform .12s; }
+.cq-mode > img { display: block; width: 100%; height: 100%; filter: drop-shadow(0 10px 18px #000c); pointer-events: none; }
+.cq-mode:hover { transform: translateY(-1.2%) scale(1.02); }
+.cq-mode:active { transform: scale(.97); }
+.cq-plate { position: absolute; display: grid; place-items: center; }
+.cq-plate b { font-size: calc(var(--u) * 2.1); letter-spacing: .08em; white-space: nowrap; line-height: 1;
+  background: linear-gradient(#fff6c8 10%, #ffd45c 50%, #c7871f 90%); -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; filter: drop-shadow(0 2px 0 #3a0d05); }
+.cq-sub { position: absolute; left: 0; right: 0; top: 101%; font-size: calc(var(--u) * 1.55); color: #f1dcae; text-shadow: 0 2px 4px #000; }
+.cq-tag { position: absolute; left: 50%; top: 9%; transform: translateX(-50%); padding: .25em .9em; border-radius: 2em; white-space: nowrap;
+  font: bold calc(var(--u) * 1.35) Georgia, serif; color: #2a1606; background: linear-gradient(180deg, #ffe39b, #c9942f);
+  border: 1px solid #fff0c4; box-shadow: 0 2px 6px #000a; }
+.cq-tag.soon { color: #f6e7c8; background: #2a1b0ee6; border-color: #b48d4c; }
+.cq-modes { margin-bottom: calc(var(--u) * 2); }
+.cq-mode.ranked { width: calc(var(--u) * 19); margin-bottom: calc(var(--u) * 2); }
+.cq-mode.ranked > img { filter: saturate(.75) drop-shadow(0 8px 14px #000c); }
+.cq-mode.ranked .cq-plate b { font-size: calc(var(--u) * 1.02); letter-spacing: .05em; }
+.cq-mode.ranked .cq-sub { font-size: calc(var(--u) * 1.3); color: #cbb58a; }
+.cq-quick { display: flex; flex-direction: column; gap: .2em; align-items: center; padding: calc(var(--u) * 1.2) calc(var(--u) * 2.4);
+  border-radius: calc(var(--u) * 1.2); border: 2px solid #d9a85a; background: linear-gradient(180deg, #4a3420e6, #1b120ae6);
+  box-shadow: inset 0 0 0 2px #6b4a24, 0 6px 16px #000a; }
+.cq-quick b { font-size: calc(var(--u) * 1.9); color: #ffe08a; letter-spacing: .04em; }
+.cq-quick small { font-size: calc(var(--u) * 1.25); color: #cbb58a; }
+.cq-quick:hover { filter: brightness(1.15); }
+
+/* ---------- The Conquest: kaart ---------- */
+.cq-scroll { position: absolute; inset: 0; overflow-x: auto; overflow-y: hidden; touch-action: pan-x; cursor: grab;
+  scrollbar-width: thin; scrollbar-color: #d9a85a #1b120a; overscroll-behavior: contain; }
+.cq-map { position: relative; height: 100%; container-type: size; }
+.cq-tile { position: absolute; top: 0; height: 100%; display: block; object-fit: fill; pointer-events: none; }
+.cq-links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.cq-links line { stroke: #fff1c9; stroke-width: 7; stroke-dasharray: 4 20; stroke-linecap: round; opacity: .9; filter: drop-shadow(0 2px 2px #0009); }
+.cq-links line.locked { stroke: #9a8f7c; opacity: .6; }
+.cq-region { position: absolute; bottom: 3.5cqh; transform: translateX(-50%); padding: .2em 1.1em; border-radius: 2em; font: bold 3.4cqh Georgia, serif;
+  letter-spacing: .14em; text-transform: uppercase; color: #ffe9b0; background: #1b120ab8; border: 1px solid #d9a85a99; white-space: nowrap; pointer-events: none; }
+.cq-node { position: absolute; width: 13cqh; height: 13cqh; margin: -6.5cqh 0 0 -6.5cqh; padding: 0; border: 0; background: none; }
+.cq-node > img:first-child { display: block; width: 100%; height: 100%; filter: drop-shadow(0 .8cqh .8cqh #000a); pointer-events: none; }
+.cq-node.boss { width: 17cqh; height: 17cqh; margin: -8.5cqh 0 0 -8.5cqh; }
+.cq-node.locked > img:first-child { filter: brightness(.82) drop-shadow(0 .8cqh .8cqh #000a); }
+.cq-node:not(.locked):hover { transform: scale(1.08); }
+.cq-node.current { animation: cqPulse 1.5s ease-in-out infinite; z-index: 2; }
+@keyframes cqPulse { 50% { transform: scale(1.12); } }
+.cq-num { position: absolute; left: 50%; top: -2.2cqh; transform: translateX(-50%); min-width: 4.2cqh; padding: 0 .9cqh; border-radius: 2cqh;
+  font: bold 2.9cqh/4.2cqh Georgia, serif; text-align: center; color: #2a1606; background: linear-gradient(180deg, #ffe9a8, #cf9a33);
+  border: 1px solid #fff3cd; box-shadow: 0 .3cqh .6cqh #000a; }
+.cq-node.locked .cq-num { color: #d9cdb6; background: #3a3229; border-color: #7d7264; }
+.cq-node .cq-stars { position: absolute; left: 50%; top: 92%; transform: translateX(-50%); display: flex; }
+.cq-node .cq-stars img { width: 4.4cqh; height: 4.4cqh; margin: 0 -.3cqh; filter: drop-shadow(0 .2cqh .3cqh #000c); }
+.cq-mapbar { position: absolute; right: max(12px, env(safe-area-inset-right)); top: max(10px, env(safe-area-inset-top)); z-index: 4; display: flex;
+  gap: 14px; align-items: center; padding: 8px 18px; border-radius: 40px; border: 2px solid #d9a85a; background: #1b120ae8; box-shadow: 0 4px 14px #000a;
+  pointer-events: none; }
+.cq-mapbar b { color: #ffde92; letter-spacing: .08em; font-size: 17px; }
+.cq-mapbar span { color: #e9d3a3; font-size: 14px; letter-spacing: .06em; }
+.cq-mapbar em { display: flex; gap: 5px; align-items: center; font: bold 16px Georgia, serif; font-style: normal; color: #fff1c9; }
+.cq-mapbar em img { width: 22px; height: 22px; }
+
+/* ---------- Missiepaneel ---------- */
+.cq-modal { position: absolute; inset: 0; z-index: 10; display: grid; place-items: center; background: #0b0708b8; animation: cqFade .15s; }
+@keyframes cqFade { from { opacity: 0; } }
+.cq-panel { position: relative; width: min(94vw, 142dvh, 1000px); background: center / 100% 100% no-repeat; container-type: inline-size;
+  filter: drop-shadow(0 14px 30px #000c); }
+.cq-panel-in { position: absolute; left: 13.5%; right: 13.5%; top: 25%; bottom: 12.5%; display: flex; flex-direction: column; color: #3d240f; text-align: center; }
+.cq-kicker { margin: 0; font: bold 1.9cqw Georgia, serif; letter-spacing: .12em; text-transform: uppercase; color: #8a4a16; }
+.cq-panel h2 { margin: .05em 0 0; font-size: 4.1cqw; line-height: 1.05; color: #5a1d0a; letter-spacing: .03em; text-shadow: 0 1px 0 #fff4d299; }
+.cq-brief { margin: .5cqw 6% 0; font-size: 2.05cqw; font-style: italic; color: #56361a; }
+.cq-cols { flex: 1; display: grid; grid-template-columns: 1.15fr 1fr; gap: 3cqw; margin-top: 1.4cqw; text-align: left; min-height: 0; }
+.cq-cols h3 { margin: 0 0 .5cqw; padding-bottom: .3cqw; font-size: 2cqw; letter-spacing: .1em; text-transform: uppercase; color: #8a4a16; border-bottom: 1px solid #a8742f88; }
+.cq-goal { margin: 0 0 .6cqw; font: bold 2.15cqw Georgia, serif; color: #3d240f; }
+.cq-conds { margin: 0; padding: 0; list-style: none; font-size: 2cqw; }
+.cq-conds li { display: flex; align-items: center; gap: .8cqw; margin: .15cqw 0; color: #56361a; }
+.cq-conds li.got { color: #3d240f; font-weight: bold; }
+.cq-conds img { width: 3cqw; height: 3cqw; flex: none; filter: drop-shadow(0 1px 1px #0006); }
+.cq-enemy { display: flex; flex-wrap: wrap; gap: .9cqw; }
+.cq-enemy > span { position: relative; width: 6.6cqw; aspect-ratio: 3 / 4; overflow: hidden; border-radius: .7cqw; background: #1b120b;
+  border: .3cqw solid #b8842f; box-shadow: 0 .3cqw .5cqw #0007; }
+.cq-enemy.many > span { width: 5cqw; }
+.cq-warn { margin: .7cqw 0 0; font: bold 1.75cqw Georgia, serif; color: #8f1d10; }
+.cq-start { position: relative; align-self: center; flex: none; width: 32cqw; margin-top: .6cqw; padding: 0; border: 0; background: none; }
+.cq-start img { display: block; width: 100%; height: auto; pointer-events: none; }
+.cq-start span { position: absolute; left: 14%; right: 14%; top: 14%; bottom: 34%; display: grid; place-items: center; font: bold 3.1cqw Georgia, serif;
+  letter-spacing: .1em; color: #ffe9a8; text-shadow: 0 .25cqw 0 #4a1606, 0 0 .8cqw #000a; }
+.cq-start:hover { filter: brightness(1.12); }
+.cq-start:active { transform: scale(.96); }
+.cq-start:disabled { filter: grayscale(.9) brightness(.7); cursor: default; }
+.cq-x { position: absolute; right: 6.5%; top: 23%; width: 5cqw; height: 5cqw; min-width: 34px; min-height: 34px; border-radius: 50%; border: 2px solid #d9a85a;
+  background: #2a1b0e; color: #ffe6a6; font-size: max(15px, 2.2cqw); }
+
+/* ---------- Trophy Road ---------- */
+.cq-screen[data-screen='trophy'] { display: flex; justify-content: center; align-items: stretch; gap: calc(var(--u) * 4); padding: 0 calc(var(--u) * 4); }
+.cq-road-scroll { position: relative; height: 100%; overflow-y: auto; overflow-x: hidden; flex: none; scrollbar-width: thin; scrollbar-color: #d9a85a #1b120a;
+  overscroll-behavior: contain; box-shadow: 0 0 0 3px #d9a85a, 0 0 40px #000; }
+.cq-road { position: relative; width: calc(var(--u) * 40); container-type: inline-size; }
+.cq-road > img { display: block; width: 100%; height: 100%; }
+.cq-arena { position: absolute; display: flex; align-items: center; gap: 2cqw; transform: translateY(-50%); }
+.cq-arena.left { left: 3%; } .cq-arena.right { right: 3%; flex-direction: row-reverse; text-align: right; }
+.cq-arena > img { width: 20cqw; height: 20cqw; filter: drop-shadow(0 1cqw 1.4cqw #000c); }
+.cq-arena span { padding: 1.4cqw 2.6cqw; border-radius: 2cqw; background: #1b120ae0; border: 1px solid #d9a85a; }
+.cq-arena b { display: block; font-size: 4cqw; color: #ffde92; white-space: nowrap; }
+.cq-arena small { display: flex; gap: 1cqw; align-items: center; font-size: 3.4cqw; color: #f1dcae; justify-content: inherit; }
+.cq-arena.right small { justify-content: flex-end; }
+.cq-arena small img { width: 4.4cqw; height: 4.4cqw; }
+.cq-road-info { position: relative; align-self: center; width: calc(var(--u) * 38); padding: calc(var(--u) * 2.4); border-radius: calc(var(--u) * 1.6); text-align: center;
+  border: 3px solid #d9a85a; background: radial-gradient(120% 80% at 50% 0%, #4a3420 0%, #22170f 55%, #120c08 100%);
+  box-shadow: inset 0 0 0 2px #6b4a24, 0 18px 50px #000c; container-type: inline-size; }
+.cq-road-info h1 { margin: 0; font-size: calc(var(--u) * 3.4); letter-spacing: .1em; color: #ffde92; text-shadow: 0 2px 0 #5a3410; }
+.cq-road-info p { margin: calc(var(--u) * 1) 0; font-size: calc(var(--u) * 1.6); color: #e9d3a3; }
+.cq-trophies { display: flex; gap: .5em; align-items: center; justify-content: center; }
+.cq-trophies img { width: calc(var(--u) * 6); height: calc(var(--u) * 6); }
+.cq-trophies b { font-size: calc(var(--u) * 4.4); color: #fff1c9; } .cq-trophies small { font-size: calc(var(--u) * 1.6); color: #cbb58a; }
+.cq-chests { display: flex; justify-content: center; gap: calc(var(--u) * 1); }
+.cq-chests img { width: calc(var(--u) * 8); height: calc(var(--u) * 8); filter: drop-shadow(0 4px 8px #000a); }
+.cq-road-info .cq-start { width: 70cqw; margin-top: calc(var(--u) * .6); }
+.cq-road-info .cq-start span { font-size: 6.8cqw; }
+.cq-road-info .cq-note { font-size: calc(var(--u) * 1.3); color: #cbb58a; font-style: italic; margin-bottom: 0; }
+
+/* Sterren op het uitslagscherm van een missie (src/screens.js) */
+.lr-mission-result { display: flex; flex-direction: column; align-items: center; gap: .9cqw; margin: .2cqw 0 0; }
+.lr-mission-result small { font: bold 1.9cqw Georgia, serif; letter-spacing: .1em; text-transform: uppercase; color: #f1dcae; }
+.lr-mission-result .cq-stars { display: flex; gap: .6cqw; }
+.lr-mission-result .cq-stars img { width: 6.4cqw; height: 6.4cqw; filter: drop-shadow(0 .4cqw .6cqw #000c); animation: lrDeal .45s backwards; }
+.lr-mission-result .cq-stars img:nth-child(2) { animation-delay: .15s; width: 7.6cqw; height: 7.6cqw; margin-top: -.9cqw; }
+.lr-mission-result .cq-stars img:nth-child(3) { animation-delay: .3s; }

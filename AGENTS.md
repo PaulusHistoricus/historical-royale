@@ -94,3 +94,15 @@ Een nieuwe kaart is één regel in `CARDS` (met `radius` en rand-tot-rand `range
 - Lanes (v0.17.1): units from different lanes only fight/heal each other in a castle area — both behind the same side's tower line, and that side has lost the tower in one of their lanes (`canFight`). On the midfield lanes stay separate, even after towers fall.
 - Phase 4 (not built): friend challenge + ranking via polling lockstep (like Relic Slide's class mode).
 - Guest play must remain usable if Google credentials are not yet set. Never put passwords, OAuth secrets, DB connection info, or privileged database operations into browser JavaScript.
+
+## Mode selection, The Conquest and Trophy Road preview (v0.18.0)
+
+- Menu: the ▶ button opens **Choose Your Mode** (`lr:open` detail `modes`); the ⚔ button starts a quick battle as before.
+- `src/conquest.js` + `src/conquest.css`: DOM screens (like `screens.js`) for mode selection, the campaign map with mission panel, and a Trophy Road **preview**. It dispatches `lr:start` with `{ mission }` (`null` = quick battle); `src/main.js` keeps that mission in `activeMission`, starts the battle and returns to the map afterwards (`reopenConquest`).
+- `src/campaign/rome.js`: data only — world 1 "Rise of Rome", 25 missions + 2 bonus missions with **stable ids** (`rome_001` … `rome_025`, `rome_bonus_01/02`). Never renumber: saved progress uses the ids. A new world is a new file registered in `WORLDS` in `src/campaign/campaign.js`.
+- `src/campaign/campaign.js`: pure rules (no DOM): unlock order, star conditions (`win`, `towers2`, `tower1`, `time:N`, `castle:N`), `missionRules()` -> `createBattle({ rules })`. Tested in `tests/campaign.test.js`.
+- Simulation: `battleRules()` in `src/sim/battle.js` (`state.rules`): `timeLimit`, `goal` (`castle` | `towers` | `survive`), `energyStart`, `energyRate`, `aiDeck`, `aiTempo`. Without rules a battle is exactly the classic battle (a test checks this).
+- Progress is stored on the device (`localStorage 'lr-conquest-v1'`, `{ missionId: stars }`). There is **no server-side campaign progress yet** and missions give no extra rewards: a signed-in player gets the normal battle reward through `match-start/finish`. Server storage (`campaign_progress`, migration 003) is the next step; do not add mission rewards before that exists.
+- Trophy Road is a static preview: there is no PvP, no trophies and no matchmaking. Arena names/thresholds in `src/conquest.js` are examples. Keep the "not available yet" wording until real PvP exists.
+- Art: `tools/art/conquest.py` (also run by `build.py`) turns `art/source/{modus-*,conquest-*,trophy-road-bg,arena-badges,trophy-icon,chest-icons}.png` into `public/assets/art/*.webp` and `src/art/conquest.json`. The three map segments are cross-faded into one strip (`MAP_OVERLAP`); mission positions in `rome.js` are source pixels of their segment. `daily-chest.png` is stored for the daily reward (not used yet).
+- Difficulty was tuned with a random-playing level-1 player (win rate falls from ~100 % at mission 1 to ~10 % at the final boss); it still needs real playtesting. Change `level`/`tempo` per mission in `rome.js`.
