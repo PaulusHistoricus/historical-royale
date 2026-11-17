@@ -33,6 +33,30 @@ const CAST = {
 };
 const WHO = Object.keys(CAST);
 
+// Geluid als een gids in beeld komt: een kus bij de dames, iets stoers bij de mannen. Bestaande effecten
+// uit public/assets/audio. [bestand, volume, maximaal aantal seconden]. Volgt de geluidsknop ('lr-sound').
+const VOICE = {
+  banner: ['kiss', 0.55], assassin: ['kiss', 0.55], priestess: ['kiss', 0.5],
+  centurion: ['sword-1', 0.6], samurai: ['sword-3', 0.6], pilot: ['machine-gun', 0.4, 0.7],
+  all: ['choir', 0.4],
+};
+let voice = null, lastVoice = null;
+function playVoice(who) {
+  if (who === lastVoice) return;                 // dezelfde gids twee stappen achter elkaar: één keer
+  lastVoice = who;
+  try { if (localStorage.getItem('lr-sound') === 'off') return; } catch {}
+  const v = VOICE[who];
+  if (!v) return;
+  try {
+    voice?.pause();
+    const a = new Audio(`${BASE}assets/audio/${v[0]}.mp3?v=${BUILD}`);
+    a.volume = v[1];
+    if (v[2]) a.addEventListener('timeupdate', () => { if (a.currentTime > v[2]) a.pause(); });
+    a.play().catch(() => {});                    // zonder eerdere tik mag een browser geluid weigeren
+    voice = a;
+  } catch {}
+}
+
 // ---------- de rondleiding ----------
 const TOUR = [
   { who: 'banner',
@@ -173,6 +197,7 @@ function show(step, o) {
   u.who.replaceChildren(); u.all.replaceChildren(); u.all.hidden = !all; u.who.hidden = all;
   if (all) WHO.forEach(n => { const i = new Image(); i.src = img(n); i.alt = ''; u.all.append(i); });
   else { const i = new Image(); i.src = img(who); i.alt = CAST[who].name; i.className = 'wave'; u.who.append(i); }
+  playVoice(all ? 'all' : who);
   u.name.textContent = all ? 'To battle!' : CAST[who].name;
   u.role.textContent = all ? WHO.map(n => CAST[n].name).join(' · ') : CAST[who].role;
   rich(u.text, step.text);
@@ -192,6 +217,7 @@ function show(step, o) {
 }
 function close() {
   cancelAnimationFrame(raf);
+  lastVoice = null;
   run = null;
   ui?.root.remove(); ui = null;
   window.lrGuideOpen = false;
