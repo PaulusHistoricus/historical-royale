@@ -40,10 +40,11 @@ const VOICE = {
   centurion: ['sword-1', 0.6], samurai: ['sword-3', 0.6], pilot: ['voice-at-ease', 0.75],
   all: ['choir', 0.4],
 };
-let voice = null, lastVoice = null;
+let voice = null;
+const spoke = new Set();                         // wie in deze rondleiding al iets zei
 function playVoice(who) {
-  if (who === lastVoice) return;                 // dezelfde gids twee stappen achter elkaar: één keer
-  lastVoice = who;
+  if (spoke.has(who)) return;                    // elke gids maar één keer per rondleiding
+  spoke.add(who);
   try { if (localStorage.getItem('lr-sound') === 'off') return; } catch {}
   const v = VOICE[who];
   if (!v) return;
@@ -217,7 +218,7 @@ function show(step, o) {
 }
 function close() {
   cancelAnimationFrame(raf);
-  lastVoice = null;
+  spoke.clear();
   run = null;
   ui?.root.remove(); ui = null;
   window.lrGuideOpen = false;
