@@ -33,6 +33,10 @@ sfx horse-death 2.3 -17
 sfx knife 0.8 -17
 sfx teleport 1.2 -19
 sfx laugh 1.1 -16
+# stemmen (freesound community, CC0): hey = Parisa in de rondleiding, hello = voor een latere moderne vrouwelijke eenheid.
+# voice-company.mp3 staat alleen in audio/source (12 s, nog niet in gebruik).
+sfx voice-hey 0.5 -16
+sfx voice-hello 0.8 -16
 # lussen: vlammenwerper en paardengetrappel
 ffmpeg -v error -y -ss 2 -t 3 -i "$SRC/flamethrower.mp3" -af "afade=t=in:d=0.15,afade=t=out:st=2.8:d=0.2,loudnorm=I=-20:TP=-2:LRA=11" -ac 1 -ar 44100 -b:a 80k "$OUT/flamethrower.mp3"
 ffmpeg -v error -y -ss 0.5 -t 3 -i "$SRC/gallop.mp3" -af "afade=t=in:d=0.1,afade=t=out:st=2.85:d=0.15,loudnorm=I=-22:TP=-2:LRA=11" -ac 1 -ar 44100 -b:a 80k "$OUT/gallop.mp3"
