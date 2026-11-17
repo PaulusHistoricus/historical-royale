@@ -2,7 +2,7 @@
 // Openen: window.dispatchEvent(new CustomEvent('lr:open', { detail: 'profile' | 'deck' | 'friends' })).
 import './screens.css';
 import { account } from './account.js';
-import { ABILITY, kindChips } from './unit-info.js';
+import { ABILITY, kindChips, combatLine, ATTACK_HINT } from './unit-info.js';
 import { CARDS } from './sim/config.js';
 import CARD_ART from './art/cards.json';
 import { CARD_TYPES, DECK_SIZE, MAX_CARD_LEVEL, UPGRADE_COST, AVATAR_KEYS } from './progression.js';
@@ -156,9 +156,9 @@ async function showDeck() {
       const frag = cost ? `<span class="lr-frag"><i style="width:${Math.min(100, 100 * c.fragments / cost[0])}%"></i><em>${c.fragments}/${cost[0]}</em></span>` : '<span class="lr-frag max"><em>MAX</em></span>';
       const can = account.signedIn && cost && c.fragments >= cost[0] && coins >= cost[1];
       return `<div class="lr-tile ${where === 'deck' && selected === i ? 'sel' : ''} ${where === 'pool' && selected !== null ? 'pick' : ''}"
-        data-where="${where}" data-i="${i}" data-type="${type}" title="${ABILITY[type] ?? ''}">
+        data-where="${where}" data-i="${i}" data-type="${type}" title="${ABILITY[type] ?? ''} ${ATTACK_HINT[cardOf(type).attack] ?? ''}">
         ${cardImg(type, 112)}<span class="lr-lvl">Lv ${c.level}</span><span class="lr-cost">${cardOf(type).cost}</span>
-        <b>${CARD_NAMES[type]}</b><span class="lr-kinds">${kindChips(type)}</span><i class="lr-ability">${ABILITY[type] ?? ''}</i>${frag}
+        <b>${CARD_NAMES[type]}</b><span class="lr-kinds">${kindChips(type)}</span><small class="lr-combat">${combatLine(type)}</small><i class="lr-ability">${ABILITY[type] ?? ''}</i>${frag}
         ${where === 'pool' || where === 'deck' ? (cost ? `<button class="lr-up ${can ? '' : 'off'}" data-up="${type}" title="Upgrade">▲ ${cost[1]} 🪙</button>` : '') : ''}
       </div>`;
     };

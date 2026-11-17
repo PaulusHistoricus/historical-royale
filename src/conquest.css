@@ -139,11 +139,11 @@
 .cq-road-info .cq-note { font-size: calc(var(--u) * 1.3); color: #cbb58a; font-style: italic; margin-bottom: 0; }
 
 /* Sterren op het uitslagscherm van een missie (src/screens.js) */
-.lr-mission-result { display: flex; flex-direction: column; align-items: center; gap: .9cqw; margin: .2cqw 0 0; }
+.lr-mission-result { display: flex; flex-direction: column; align-items: center; gap: .5cqw; margin: 0; }
 .lr-mission-result small { font: bold 1.9cqw Georgia, serif; letter-spacing: .1em; text-transform: uppercase; color: #f1dcae; }
 .lr-mission-result .cq-stars { display: flex; gap: .6cqw; }
-.lr-mission-result .cq-stars img { width: 6.4cqw; height: 6.4cqw; filter: drop-shadow(0 .4cqw .6cqw #000c); animation: lrDeal .45s backwards; }
-.lr-mission-result .cq-stars img:nth-child(2) { animation-delay: .15s; width: 7.6cqw; height: 7.6cqw; margin-top: -.9cqw; }
+.lr-mission-result .cq-stars img { width: 5.2cqw; height: 5.2cqw; filter: drop-shadow(0 .4cqw .6cqw #000c); animation: lrDeal .45s backwards; }
+.lr-mission-result .cq-stars img:nth-child(2) { animation-delay: .15s; width: 6.2cqw; height: 6.2cqw; margin-top: -.7cqw; }
 .lr-mission-result .cq-stars img:nth-child(3) { animation-delay: .3s; }
 
 /* Soort op de vijandelijke kaarten in het missiepaneel: B = Bio, M = Mechanical, S = Special */

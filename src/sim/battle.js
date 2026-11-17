@@ -19,8 +19,7 @@ import { cardLevelMultiplier } from '../progression.js';
 import {
   CARDS, STRUCTURES, STRUCTURE_POSITIONS, LANES, DEPLOY_ZONE, DETECTION_RANGE,
   MATCH_SECONDS, OVERTIME_AT, ENERGY_START, ENERGY_MAX, ENERGY_SECONDS,
-  ENERGY_SECONDS_OVERTIME, AI, DEPLOY_ADVANCE, SUPPORT_TYPES,
-} from './config.js';
+  ENERGY_SECONDS_OVERTIME, AI, DEPLOY_ADVANCE, SUPPORT_TYPES, DAMAGE_TABLE, STRUCTURE_ATTACK } from './config.js';
 
 const EPS = 1e-6;
 const BANNER = CARDS.find(c => c.type === 'banner');
@@ -168,6 +167,13 @@ export function deployZone(state, side, lane) {
 }
 
 /** Afstand van rand tot rand langs de baan. Negatief = lichamen overlappen. */
+/** Schadefactor van aanvaller op doelwit (DAMAGE_TABLE); 1 als iets onbekend is. */
+export function damageFactor(attacker, target) {
+  const attack = attacker.card ? attacker.card.attack : STRUCTURE_ATTACK;
+  const armor = target.kind ? 'building' : target.card?.armor;
+  return DAMAGE_TABLE[attack]?.[armor] ?? 1;
+}
+
 export function gap(a, b) {
   return Math.abs(a.x - b.x) - a.radius - b.radius;
 }
@@ -504,7 +510,6 @@ export function step(state, dt) {
       damage = Math.round(damage * (1 + attacker.card.backstabBonus));
       attacker.backstabUsed = true; backstab = true;
     }
-    if (flame && target.kind) damage = damage * attacker.card.structurePct;
     // Schildmuur: biologische bondgenoten achter een Spartaan krijgen 40 % minder schade van
     // projectielen van afstandseenheden (geen artillerie, gebouwen, vlammen of P-51).
     if (target.shielded && attacker.card?.role === 'ranged' && attacker.card.type !== 'flamegi') {
@@ -517,10 +522,8 @@ export function step(state, dt) {
       damage = Math.round(damage * attacker.card.stealthBonus);
       attacker.firstStrikeDone = true;
     }
-    // Pantser beschermt mechanische eenheden tegen gewone aanvallen, niet tegen kanonnen.
-    if (target.card?.material === 'mechanical') {
-      damage = Math.round(damage * (attacker.card?.role === 'siege' ? 1.25 : 0.85));
-    }
+    // Schademodel: aanvalstype x pantserklasse (DAMAGE_TABLE in config.js).
+    damage = damage * damageFactor(attacker, target);
     const before = target.hp;
     target.hp = Math.max(0, target.hp - damage);
     if (!target.kind) target.lastHitBy = attacker.id;

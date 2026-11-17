@@ -43,7 +43,36 @@ def panel_frames(a, y0, y1, x0, x1, count, thresh=58, mingap=8):
     return [(x0 + r0, y0, x0 + r1, y1) for r0, r1 in runs]
 
 
-def clean_alpha(rgb, al, bg_blobs=True):
+def _grabcut(rgb):
+    """Masker zonder rembg: OpenCV GrabCut, gestart vanuit het verschil met de bordkleur.
+    De bordkleur wordt per rij geschat uit de linker- en rechterrand (het bord loopt naar onderen
+    donkerder af). Zwart leer is iets donkerder dan het bord; haar, huid en glans wijken sterk af."""
+    import cv2
+    f = rgb.astype(np.float32)
+    h, w = f.shape[:2]
+    side = np.concatenate([f[:, :4], f[:, -4:]], 1)                # (h, 8, 3)
+    bg = ndi.median_filter(np.median(side, 1), size=(9, 1))          # (h, 3), glad over rijen
+    dist = np.abs(f - bg[:, None]).max(2)
+    lum, bgl = f.max(2), bg.max(1)[:, None]
+    # roodzwarte schaduw rond magie (hartjes) is ook donker, maar heeft een rode zweem; zwart leer niet
+    halo = (f[..., 0] - f[..., 2] > 5) & (f[..., 1] < 12) & (lum < 45)
+    darker = (lum < bgl - 6) & ~halo                                  # pak en laarzen
+    mask = np.full((h, w), cv2.GC_PR_BGD, np.uint8)
+    mask[(dist > 10) | darker] = cv2.GC_PR_FGD
+    mask[(dist > 45) | ((lum < bgl - 12) & ~halo)] = cv2.GC_FGD
+    mask[halo & (dist < 30)] = cv2.GC_PR_BGD
+    edge = np.zeros((h, w), bool); edge[:3] = True; edge[:, :3] = True; edge[:, -3:] = True
+    mask[edge & (dist < 20)] = cv2.GC_BGD
+    bgm, fgm = np.zeros((1, 65), np.float64), np.zeros((1, 65), np.float64)
+    cv2.grabCut(np.ascontiguousarray(rgb[..., ::-1]), mask, None, bgm, fgm, 6, cv2.GC_INIT_WITH_MASK)
+    fg = (mask == cv2.GC_FGD) | (mask == cv2.GC_PR_FGD)
+    # wat gelijk is aan de bordkleur hoort er niet bij (donker vak rond gloed, vlak tussen de benen)
+    fg &= ((dist > 6) | (lum < bgl - 3)) & ~(halo & (dist < 30))
+    fg = ndi.binary_closing(fg, iterations=2)
+    return np.where(fg, 255, 0).astype(np.float32)
+
+
+def clean_alpha(rgb, al, bg_blobs=True, feet=True):
     """u2net-alpha -> strak masker: figuur volledig dekkend, waas en grondschaduw weg."""
     f = rgb.astype(float)
     bg = np.median(np.concatenate([f[:4].reshape(-1, 3), f[:, :4].reshape(-1, 3), f[:, -4:].reshape(-1, 3)]), 0)
@@ -65,8 +94,9 @@ def clean_alpha(rgb, al, bg_blobs=True):
         touch = ndi.maximum(outside, bl, range(1, bn + 1))
         core &= ~np.isin(bl, [i + 1 for i in range(bn) if bs[i] > 80 and touch[i]])
     # grondschaduw: onderste strook, alleen pixels die op de achtergrond lijken weg
-    h = core.shape[0]; foot = np.zeros_like(core); foot[int(h * 0.9):] = True
-    core &= ~(foot & (dist < 28))
+    if feet:   # uit voor figuren met zwarte laarzen op een donker bord (die zouden wegvallen)
+        h = core.shape[0]; foot = np.zeros_like(core); foot[int(h * 0.9):] = True
+        core &= ~(foot & (dist < 28))
     core = ndi.binary_opening(core, iterations=1)
     lab, n = ndi.label(core)
     if n:
@@ -81,7 +111,7 @@ def _thin_line(sl):
     h, w = sl[0].stop - sl[0].start, sl[1].stop - sl[1].start
     return (h <= 7 and w > 30) or (w <= 7 and h > 30)   # paneelrand, geen figuur
 
-def cut_frame(a, box, pad=10, glow=True, fx_only=False, bg_blobs=True):
+def cut_frame(a, box, pad=10, glow=True, fx_only=False, bg_blobs=True, matte='rembg', feet=True):
     """Geeft (rgb, mask, alpha) voor één frame."""
     x0, y0, x1, y1 = box
     X0, Y0 = max(0, x0 - pad), max(0, y0)
@@ -90,7 +120,8 @@ def cut_frame(a, box, pad=10, glow=True, fx_only=False, bg_blobs=True):
     if fx_only:
         al = np.zeros(rgb.shape[:2], np.float32)
     else:   # AI-masker, daarna strak gemaakt: figuur dekkend, schaduwwaas en grondschaduw weg
-        al = clean_alpha(rgb, _rembg(Image.fromarray(rgb)).astype(np.float32), bg_blobs).astype(np.float32)
+        raw = _grabcut(rgb) if matte == 'grabcut' else _rembg(Image.fromarray(rgb)).astype(np.float32)
+        al = clean_alpha(rgb, raw, bg_blobs, feet).astype(np.float32)
     if glow:
         # emissieve effecten: helderheid boven de achtergrond = dekking (zwart-sleutel)
         f = rgb.astype(np.float32)
@@ -127,7 +158,7 @@ def cut_frame(a, box, pad=10, glow=True, fx_only=False, bg_blobs=True):
     sl = (slice(b[1], b[3]), slice(b[0], b[2]))
     return col[sl], m[sl], al[sl].astype(np.uint8)
 
-def board_unit(path, panels, x0, x1, glow=True, fx=None, bg_blobs=True):
+def board_unit(path, panels, x0, x1, glow=True, fx=None, bg_blobs=True, matte='rembg', feet=True):
     """panels: {anim: (y0, y1, aantal) of (y0, y1, aantal, x0, x1)} -> groepen voor build().
     fx: {anim: {frame-indexen}} voor frames met alleen rook/vonken (geen figuur)."""
     a = np.array(Image.open(path).convert('RGB'))
@@ -136,7 +167,7 @@ def board_unit(path, panels, x0, x1, glow=True, fx=None, bg_blobs=True):
     for anim, spec in panels.items():
         y0, y1, count = spec[:3]
         px0, px1 = (spec[3], spec[4]) if len(spec) > 3 else (x0, x1)
-        G[anim] = [cut_frame(a, b, glow=glow, fx_only=i in fx.get(anim, ()), bg_blobs=bg_blobs)
+        G[anim] = [cut_frame(a, b, glow=glow, fx_only=i in fx.get(anim, ()), bg_blobs=bg_blobs, matte=matte, feet=feet)
                    for i, b in enumerate(panel_frames(a, y0, y1, px0, px1, count))]
     return G
 

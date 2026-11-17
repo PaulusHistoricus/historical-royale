@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CARDS } from '../src/sim/config.js';
-import { ABILITY, unitKinds } from '../src/unit-info.js';
+import { ABILITY, unitKinds, combatLine, ARMOR_NAME, ATTACK_NAME, ATTACK_HINT } from '../src/unit-info.js';
 
 test('elke kaart heeft een soort en een vaardigheid', () => {
   for (const c of CARDS) {
@@ -16,4 +16,10 @@ test('elke kaart heeft een soort en een vaardigheid', () => {
   assert.deepEqual(unitKinds('p51'), ['Mechanical', 'Special']);
   assert.deepEqual(unitKinds('cannon'), ['Mechanical']);
   assert.deepEqual(unitKinds('healer'), ['Bio', 'Special']);
+});
+
+test('elke pantserklasse en elk aanvalstype heeft een naam in het spel', () => {
+  for (const c of CARDS) { assert.ok(ARMOR_NAME[c.armor], c.type); assert.ok(ATTACK_NAME[c.attack] && ATTACK_HINT[c.attack], c.type); }
+  assert.equal(combatLine('spartan'), 'Heavy armor · Melee');
+  assert.equal(combatLine('cannon'), 'Mechanical · Siege');
 });
