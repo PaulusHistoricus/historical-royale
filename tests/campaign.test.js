@@ -117,6 +117,7 @@ test('Rise of Rome: 25 hoofdmissies + 2 bonusmissies met vaste, unieke id\'s', (
   assert.deepEqual(bonus.map(x => x.id), ['rome_bonus_01', 'rome_bonus_02']);
   assert.equal(new Set(allMissions().map(x => x.id)).size, allMissions().length);
   assert.equal(main.at(-1).boss, true);
+  assert.deepEqual(main.filter(x => x.boss).map(x => x.bossId), ['vercix', 'tigris', 'ferox']);
   assert.equal(missionById('rome_025').title, 'The Dark Fortress');
   assert.equal(missionById('nope'), null);
 });
