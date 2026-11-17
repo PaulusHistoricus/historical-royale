@@ -33,10 +33,10 @@ const CAST = {
 };
 const WHO = Object.keys(CAST);
 
-// Geluid als een gids in beeld komt: een kus bij de dames, iets stoers bij de mannen. Bestaande effecten
+// Geluid als een gids in beeld komt: een kus bij Aurélie, mes bij Parisa, genezing bij Meret, iets stoers bij de mannen. Bestaande effecten
 // uit public/assets/audio. [bestand, volume, maximaal aantal seconden]. Volgt de geluidsknop ('lr-sound').
 const VOICE = {
-  banner: ['kiss', 0.55], assassin: ['kiss', 0.55], priestess: ['kiss', 0.5],
+  banner: ['kiss', 0.55], assassin: ['knife', 0.6], priestess: ['heal', 0.45, 1.2],   // kus alleen bij Aurélie
   centurion: ['sword-1', 0.6], samurai: ['sword-3', 0.6], pilot: ['machine-gun', 0.4, 0.7],
   all: ['choir', 0.4],
 };
