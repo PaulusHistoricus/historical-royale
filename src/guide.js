@@ -37,7 +37,7 @@ const WHO = Object.keys(CAST);
 // uit public/assets/audio. [bestand, volume, maximaal aantal seconden]. Volgt de geluidsknop ('lr-sound').
 const VOICE = {
   banner: ['spear-1', 0.6], assassin: ['voice-hey', 0.7], priestess: ['kiss', 0.55],   // kus alleen bij Meret
-  centurion: ['sword-1', 0.6], samurai: ['sword-3', 0.6], pilot: ['machine-gun', 0.4, 0.7],
+  centurion: ['sword-1', 0.6], samurai: ['sword-3', 0.6], pilot: ['voice-at-ease', 0.75],
   all: ['choir', 0.4],
 };
 let voice = null, lastVoice = null;

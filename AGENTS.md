@@ -115,7 +115,7 @@ Een nieuwe kaart is één regel in `CARDS` (met `radius` en rand-tot-rand `range
 - **First battle** (`BATTLE`): cards, lanes, energy, pause. While a guide is open `window.lrGuideOpen` is true and the battle (including the countdown) waits.
 - Targets: a CSS selector, or `canvas:<key>` for something Phaser draws. `src/main.js` exposes those positions through `window.lrCanvasRect(key)` (menu: `play`, `battle`, `team`, `settings`, `trophy`, `decks`, `gift`, `bell`; battle: `cards`, `lanes`, `energy`, `pause`) using `screenRect()`.
 - Seen state: `localStorage 'lr-guide'` (`{ tour, battle }`), per device.
-- Sound (v0.23.2): `VOICE` in `src/guide.js` plays an existing effect when a guide appears (spear for Aurélie, a voiced "hey" for Parisa, kiss for Meret; sword for Marcus and Kenji; a short machine-gun burst for James; choir on the closing step). Once per guide in a row, respects `lr-sound`. Voice clips: `audio/source/voice-*.mp3` (freesound community); `voice-hello` is kept for a future modern female unit, `voice-company` is stored but unused.
+- Sound (v0.23.2): `VOICE` in `src/guide.js` plays an existing effect when a guide appears (spear for Aurélie, a voiced "hey" for Parisa, kiss for Meret; sword for Marcus and Kenji; "At ease, soldier" for James; choir on the closing step). Once per guide in a row, respects `lr-sound`. Voice clips: `audio/source/voice-*.mp3` (freesound community); `voice-hello` is kept for a future modern female unit, `voice-company` is stored but unused.
 - Art: `art/source/gids-*.png` -> `public/assets/art/guide-*.webp` via `tools/art/guides.py` (also run by `build.py`). The sources have a reddish fringe; only the solid figure is kept. `gids-banner-assassin.png` holds two figures.
 
 ## Campaign arenas (v0.20.0)
