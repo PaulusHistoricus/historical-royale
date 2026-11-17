@@ -2,11 +2,13 @@
 declare(strict_types=1);
 require_once __DIR__ . '/_bootstrap.php';
 // The Conquest op de server: welke missies bestaan, in welke volgorde ze vrijkomen en de sterren per speler.
-// Houd dit gelijk aan src/campaign/rome.js (getest in tests/campaign.test.js). Id's nooit hernummeren.
+// Houd dit gelijk aan src/campaign/rome.js en knights.js (getest in tests/campaign.test.js). Id's nooit hernummeren.
 
-const CAMPAIGN_MAIN = ['rome_001', 'rome_002', 'rome_003', 'rome_004', 'rome_005', 'rome_006', 'rome_007', 'rome_008', 'rome_009', 'rome_010', 'rome_011', 'rome_012', 'rome_013', 'rome_014', 'rome_015', 'rome_016', 'rome_017', 'rome_018', 'rome_019', 'rome_020', 'rome_021', 'rome_022', 'rome_023', 'rome_024', 'rome_025'];
+const CAMPAIGN_MAIN = ['rome_001', 'rome_002', 'rome_003', 'rome_004', 'rome_005', 'rome_006', 'rome_007', 'rome_008', 'rome_009', 'rome_010', 'rome_011', 'rome_012', 'rome_013', 'rome_014', 'rome_015', 'rome_016', 'rome_017', 'rome_018', 'rome_019', 'rome_020', 'rome_021', 'rome_022', 'rome_023', 'rome_024', 'rome_025',
+    'knights_001', 'knights_002', 'knights_003', 'knights_004', 'knights_005', 'knights_006', 'knights_007', 'knights_008', 'knights_009', 'knights_010', 'knights_011', 'knights_012', 'knights_013', 'knights_014', 'knights_015', 'knights_016', 'knights_017', 'knights_018', 'knights_019', 'knights_020', 'knights_021', 'knights_022', 'knights_023', 'knights_024', 'knights_025'];
 // bonusmissie => missie die eerst gehaald moet zijn
-const CAMPAIGN_BONUS = ['rome_bonus_01' => 'rome_005', 'rome_bonus_02' => 'rome_015'];
+const CAMPAIGN_BONUS = ['rome_bonus_01' => 'rome_005', 'rome_bonus_02' => 'rome_015',
+    'knights_bonus_01' => 'knights_005', 'knights_bonus_02' => 'knights_015'];
 const MISSION_STAR_COINS = 10;   // per ster die je voor het eerst haalt (max. 3 per missie); geen farmen
 
 function isMission(mixed $id): bool {

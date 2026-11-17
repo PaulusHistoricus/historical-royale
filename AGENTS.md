@@ -149,6 +149,15 @@ Een nieuwe kaart is één regel in `CARDS` (met `radius` en rand-tot-rand `range
 - `art/source/spion-sprites.png` (true transparency, one row per animation) replaces the old board for the in-game spy; cut by `tools/art/transparent_sheet.py`, which removes the red/yellow fringe but keeps glow (hearts, muzzle flash, pink dust). The old board lost her legs in the `charm` frames.
 - `tools/art/boards.py` gained a `matte='grabcut'` option (OpenCV) for boards when `rembg` is not installed.
 
+## World 2 and world selection (v0.24.0)
+
+- `src/campaign/knights.js`: "Age of Knights", 25 missions + 2 bonus missions (`knights_001` … `knights_025`, `knights_bonus_01/02`, never renumber). `knights_001` has `after: 'rome_025'`, so the world opens after the last Rome mission. Registered in `WORLDS` (`src/campaign/campaign.js`) and appended to `CAMPAIGN_MAIN`/`CAMPAIGN_BONUS` in `public/api/_campaign.php` (the server opens a main mission after the previous one in that single list; `tests/campaign.test.js` checks it matches the game).
+- Rules: `worldOf`, `worldById`, `worldUnlocked`, `activeWorld` (last open world), `nextMission` (crosses world borders). A world object has `id`, `title`, `regions`, `arenas`, optional `card` (world card art; Rome uses `mode-conquest`).
+- UI (`src/conquest.js`): The Conquest card opens **world selection** (`lr:open` detail `worlds`); a locked world shows what to defeat first. `lr:open` `conquest` opens the map of the world you are in. Map art per world: `ART.maps[world.id]`.
+- Bosses: missions with `boss: true` may set `bossId`; the mission panel then shows the portrait `boss-<id>.webp` (`tools/art/bosses.py`, sources `art/source/bosses/boss-*.png`). The sprite sheets `boss-*-sheet.png` are stored for the boss fights; a boss is still a stronger computer opponent (no special rule yet, see the design doc).
+- Art: `tools/art/conquest.py` builds a map per world (`MAPS`: `conquest-rome-1..3` -> `conquest-map-*`, `knights-map-1..3` -> `knights-map-*`; every segment is resized to 1870 x 841) plus `world-knights.webp` (parchment plate, measured by hand) and `worlds-bg.webp`. Arenas `arena-meadow`, `arena-winter`, `arena-ruins` in `tools/art/arenas.py`.
+- Difficulty tuned for a random-playing player with level-3 cards (about 90 % win at mission 1 down to ~10 % at King Aldric).
+
 ## Ready-made upload folder
 
 The Cloud86 workflow also force-pushes the packaged `public/` + `private/` to the branch **`cloud86-build`** (one commit, no history; source branch and commit in the message). `private/` only holds `legionroyale.example.php` and a README, never real credentials. Fetch it with `git fetch --depth=1 origin cloud86-build`.

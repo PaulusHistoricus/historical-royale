@@ -1,22 +1,25 @@
 // The Conquest — regels van de campagne. Puur JavaScript (geen Phaser, geen DOM), getest in
-// tests/campaign.test.js. De gegevens per wereld staan in aparte bestanden (rome.js).
+// tests/campaign.test.js. De gegevens per wereld staan in aparte bestanden (rome.js, knights.js).
 //
 // Voortgang is één object { missieId: sterren (1..3) }. Waar het bewaard wordt (nu: localStorage,
 // later de server) regelt src/conquest.js; deze functies werken alleen op dat object.
 import { CARDS } from '../sim/config.js';
 import { ROME } from './rome.js';
+import { KNIGHTS } from './knights.js';
 
-export const WORLDS = [ROME];
+/** Werelden in speelvolgorde. De eerste hoofdmissie van een volgende wereld heeft `after`: de laatste van de vorige. */
+export const WORLDS = [ROME, KNIGHTS];
 export const MAX_STARS = 3;
 
 export const allMissions = () => WORLDS.flatMap(w => w.missions);
 export const missionById = id => allMissions().find(x => x.id === id) ?? null;
+export const worldById = id => WORLDS.find(w => w.id === id) ?? null;
+export const worldOf = mission => WORLDS.find(w => w.missions.includes(mission)) ?? null;
 
 /** De missie die eerst gehaald moet zijn (null = meteen speelbaar). */
 export function requirement(mission) {
   if (mission.after !== undefined) return mission.after;
-  const world = WORLDS.find(w => w.missions.includes(mission));
-  const main = world.missions.filter(x => !x.bonus);
+  const main = worldOf(mission).missions.filter(x => !x.bonus);
   const i = main.indexOf(mission);
   return i > 0 ? main[i - 1].id : null;
 }
@@ -37,12 +40,23 @@ export function currentMission(progress, world = ROME) {
 export function totalStars(progress, world = ROME) {
   return world.missions.reduce((sum, x) => sum + starsOf(progress, x.id), 0);
 }
+/** Een wereld is open zodra haar eerste hoofdmissie speelbaar is. */
+export const worldUnlocked = (progress, world) => isUnlocked(progress, world.missions.find(x => !x.bonus));
+/** De wereld waar je nu bent: de laatste open wereld (alles gehaald = de laatste wereld). */
+export function activeWorld(progress) {
+  return [...WORLDS].reverse().find(w => worldUnlocked(progress, w)) ?? WORLDS[0];
+}
+/** De volgende hoofdmissie, ook over de grens van een wereld heen; null na de allerlaatste. */
+export function nextMission(mission) {
+  if (mission.bonus) return null;
+  const main = WORLDS.flatMap(w => w.missions.filter(x => !x.bonus));
+  return main[main.indexOf(mission) + 1] ?? null;
+}
 
 /** Arena (textuursleutel) van een missie: eigen keuze, anders die van het gebied op de kaart. */
 export function arenaFor(mission) {
   if (mission.arena) return mission.arena;
-  const world = WORLDS.find(w => w.missions.includes(mission));
-  return world?.arenas?.[mission.seg - 1] ?? 'arena';
+  return worldOf(mission)?.arenas?.[mission.seg - 1] ?? 'arena';
 }
 
 /** Missie -> regels voor createBattle({ rules }). */

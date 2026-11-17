@@ -4,7 +4,8 @@
 
 Bronnen (art/source/, PNG's van ChatGPT, de meeste met echte transparantie):
   modus-conquest.png, modus-trophy-road.png, modus-ranked-locked.png   moduskaarten (naamplaat leeg)
-  conquest-rome-1..3.png                                               kaartsegmenten, weg loopt links->rechts door
+  conquest-rome-1..3.png, knights-map-1..3.png                         kaartsegmenten per wereld (MAPS), weg loopt links->rechts door
+  world-knights.png, knights-landscape.png                             wereldkaart (keuzescherm) en achtergrond van het wereldscherm
   conquest-nodes.png                                                   6 missie-badges op een rij
   conquest-stars.png                                                   ster leeg, vol, gloed
   conquest-mission-panel.png, conquest-scroll.png                      perkamentpaneel en -rol (leeg)
@@ -22,6 +23,17 @@ from PIL import Image
 # het segment (seg, x, y); src/conquest.js rekent ze om met MAP_OVERLAP uit het manifest.
 MAP_OVERLAP = 90
 MAP_TILES = 3
+# wereld -> (bronnen met {} voor 1..3, uitvoernaam van de tegels). Alle segmenten worden op de maat
+# van conquest-rome-1 gebracht (1870 x 841), zodat missieposities per wereld hetzelfde werken.
+MAPS = {
+    'rome': ('conquest-rome-{}.png', 'conquest-map'),
+    'knights': ('knights-map-{}.png', 'knights-map'),
+}
+# Wereldkaarten voor het keuzescherm. Rome gebruikt de moduskaart 'mode-conquest'.
+# Bij world-knights is de naamplaat perkament (niet donkerrood): vlak met de hand gemeten, in bronpixels.
+WORLD_CARDS = {
+    'world-knights': ('world-knights.png', (360, 925, 1085, 1030)),
+}
 
 NODES = ['locked', 'open', 'current', 'done', 'boss', 'bonus']
 NODE_CUTS = [365, 712, 1082, 1415, 1816]   # tussen de badges; de gloed van 'current' loopt over de buren heen
@@ -123,26 +135,37 @@ def build_conquest(SRC, OUT, MANIFEST):
         a = _resize(_trim(_rgba(SRC + src)), width=760)
         info[name] = {**_save(a, f'{OUT}/{name}.webp'), 'plate': _plate(a)}
 
-    # --- Campagnekaart: drie segmenten -> één strook met overvloeiing -> tegels ---
-    segs = [np.array(Image.open(f'{SRC}conquest-rome-{i}.png').convert('RGB')).astype(float) for i in (1, 2, 3)]
-    h, w = segs[0].shape[:2]
-    assert all(s.shape[:2] == (h, w) for s in segs), 'kaartsegmenten moeten even groot zijn'
-    step = w - MAP_OVERLAP
-    strip = np.zeros((h, step * 2 + w, 3))
-    ramp = np.linspace(0, 1, MAP_OVERLAP)[None, :, None]
-    for i, s in enumerate(segs):
-        x = i * step
-        if i == 0: strip[:, :w] = s
-        else:
-            strip[:, x:x + MAP_OVERLAP] = strip[:, x:x + MAP_OVERLAP] * (1 - ramp) + s[:, :MAP_OVERLAP] * ramp
-            strip[:, x + MAP_OVERLAP:x + w] = s[:, MAP_OVERLAP:]
-    strip = strip.clip(0, 255).astype(np.uint8)
-    total = strip.shape[1] - strip.shape[1] % MAP_TILES
-    tile = total // MAP_TILES
-    for i in range(MAP_TILES):
-        Image.fromarray(strip[:, i * tile:(i + 1) * tile], 'RGB').save(f'{OUT}/conquest-map-{i + 1}.webp', quality=82, method=6)
-    info['map'] = {'width': total, 'height': h, 'tiles': MAP_TILES, 'tileWidth': tile,
-                   'segmentWidth': w, 'segmentStep': step}
+    # --- Campagnekaarten: per wereld drie segmenten -> één strook met overvloeiing -> tegels ---
+    info['maps'] = {}
+    size = Image.open(SRC + MAPS['rome'][0].format(1)).size
+    for world, (pattern, out_name) in MAPS.items():
+        segs = [np.array(Image.open(SRC + pattern.format(i)).convert('RGB').resize(size, Image.LANCZOS)).astype(float) for i in (1, 2, 3)]
+        h, w = segs[0].shape[:2]
+        step = w - MAP_OVERLAP
+        strip = np.zeros((h, step * 2 + w, 3))
+        ramp = np.linspace(0, 1, MAP_OVERLAP)[None, :, None]
+        for i, s in enumerate(segs):
+            x = i * step
+            if i == 0: strip[:, :w] = s
+            else:
+                strip[:, x:x + MAP_OVERLAP] = strip[:, x:x + MAP_OVERLAP] * (1 - ramp) + s[:, :MAP_OVERLAP] * ramp
+                strip[:, x + MAP_OVERLAP:x + w] = s[:, MAP_OVERLAP:]
+        strip = strip.clip(0, 255).astype(np.uint8)
+        total = strip.shape[1] - strip.shape[1] % MAP_TILES
+        tile = total // MAP_TILES
+        for i in range(MAP_TILES):
+            Image.fromarray(strip[:, i * tile:(i + 1) * tile], 'RGB').save(f'{OUT}/{out_name}-{i + 1}.webp', quality=82, method=6)
+        info['maps'][world] = {'tile': out_name, 'width': total, 'height': h, 'tiles': MAP_TILES, 'tileWidth': tile,
+                               'segmentWidth': w, 'segmentStep': step}
+
+    # --- Wereldkaarten en achtergrond van het wereldscherm ---
+    for name, (src, box) in WORLD_CARDS.items():
+        a = _rgba(SRC + src)
+        plate = _pct(box, a.shape[1], a.shape[0])
+        a = _resize(a, width=760)
+        info[name] = {**_save(a, f'{OUT}/{name}.webp'), 'plate': plate}
+    bg = Image.open(SRC + 'knights-landscape.png').convert('RGB')
+    bg.resize((1280, round(1280 * bg.height / bg.width)), Image.LANCZOS).save(f'{OUT}/worlds-bg.webp', quality=80, method=6)
 
     # --- Missie-badges en sterren ---
     for name, part in zip(NODES, _split(_rgba(SRC + 'conquest-nodes.png'), NODE_CUTS)):
