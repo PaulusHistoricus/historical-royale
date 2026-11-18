@@ -4,6 +4,7 @@ import './screens.css';
 import { account } from './account.js';
 import { CARDS } from './sim/config.js';
 import CARD_ART from './art/cards.json';
+import ACH_ART from './art/achievements.json';
 import { CARD_TYPES, DECK_SIZE, MAX_CARD_LEVEL, UPGRADE_COST, AVATAR_KEYS } from './progression.js';
 import { BUILD } from './version.js';
 
@@ -14,6 +15,17 @@ const NAMES = { melee: 'Legionary', archer: 'Archer', cannon: 'Cannon', cavalry:
   horse_archer: 'Horse Archer', musket: 'Musketeer', healer: 'Priestess', samurai: 'Samurai', spy: 'Spy',
   firethrower: 'Fire Thrower', p51: 'P-51 Mustang',
   spartan: 'Spartan Guardian', plague: 'Plague Doctor', banner: 'Banner Maiden', flamegi: 'Flamethrower GI', lancer: 'Steppe Lancer', assassin: 'Persian Assassin' };
+// Prestatie-icoon uit achievements.webp; nieuwe prestaties zonder eigen icoon lenen er tijdelijk één.
+const ACH_FALLBACK = { wins_100: 'wins_50', matches_500: 'matches_100', towers_500: 'towers_100', streak_25: 'streak_10',
+  level_50: 'level_25', castle_1: 'towers_100', castle_25: 'towers_100', flawless_1: 'matches_10', flawless_25: 'matches_10',
+  kills_500: 'matches_100', kills_5000: 'matches_100', full_deck: 'units_2000', upgraded_12: 'card_3', friends_1: 'units_250',
+  friends_10: 'units_2000', spartan_10: 'matches_10', banner_10: 'units_250', plague_50: 'streak_10', assassin_50: 'streak_10',
+  flamegi_100: 'streak_10', lancer_50: 'streak_10' };
+function achIcon(key, unlocked, px = 52) {
+  const i = ACH_ART.icons[key] ?? ACH_ART.icons[ACH_FALLBACK[key]] ?? 0;
+  return `<span class="lr-ach-icon${unlocked ? '' : ' locked'}" style="width:${px}px;height:${px}px;background:url(${BASE}assets/art/achievements.webp?v=${BUILD})
+    ${-i * px}px 0 / ${ACH_ART.count * px}px ${px}px">${unlocked ? '' : '<i>🔒</i>'}</span>`;
+}
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const root = document.createElement('div');
@@ -95,7 +107,7 @@ async function showProfile(tab = 'stats') {
         .map(([k, v]) => `<div><b>${v}</b><span>${k}</span></div>`).join('')}
     </section>
     <section data-panel="achievements" class="lr-ach">
-      ${p.achievements.map(a => `<div class="${a.unlocked ? 'done' : ''}"><span class="lr-ach-icon">${a.unlocked ? '🏆' : '🔒'}</span>
+      ${p.achievements.map(a => `<div class="${a.unlocked ? 'done' : ''}">${achIcon(a.key, a.unlocked)}
         <div><b>${esc(a.title)}</b><small>${esc(a.description)}</small>
         ${a.unlocked ? '' : `<span class="lr-xpbar small"><i style="width:${Math.round(100 * a.progress / a.target)}%"></i></span><small>${a.progress} / ${a.target}</small>`}</div></div>`).join('')}
     </section>
@@ -276,7 +288,7 @@ function showResult({ winner, reward, error, guest }) {
       <div class="lr-level"><b>Level ${reward.level}</b><span class="lr-xpbar"><i style="width:${reward.xpForNext ? Math.round(100 * reward.xpInLevel / reward.xpForNext) : 100}%"></i></span>
         <small>${reward.xpForNext ? `${reward.xpInLevel} / ${reward.xpForNext} XP` : 'Max level'}</small><em class="lr-xpgain">+${reward.xpGained} XP</em></div>
       ${reward.level > reward.levelBefore ? `<p class="lr-levelup">⭐ Level up! You reached level ${reward.level} (+${100 * (reward.level - reward.levelBefore)} 🪙)</p>` : ''}
-      ${(reward.achievements ?? []).map(a => `<p class="lr-ach-new">🏆 <b>${esc(a.title)}</b> — ${esc(a.description)}</p>`).join('')}`
+      ${(reward.achievements ?? []).map(a => `<p class="lr-ach-new">${achIcon(a.key, true, 28)} <b>${esc(a.title)}</b> — ${esc(a.description)}</p>`).join('')}`
     : `<p class="lr-muted lr-noreward">${guest ? 'Sign in to earn XP, coins and card fragments.' : esc(error || 'No rewards for this battle.')}</p>`}
     <div class="lr-result-actions">${artButton('lr-again', win ? 'Play again' : 'Try again')}${artButton('lr-menu', 'Menu', true)}</div>`, el => {
     el.querySelector('.lr-close').remove();
