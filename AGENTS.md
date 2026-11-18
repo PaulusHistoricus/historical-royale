@@ -159,6 +159,14 @@ Een nieuwe kaart is één regel in `CARDS` (met `radius` en rand-tot-rand `range
 - Art: `tools/art/conquest.py` builds a map per world (`MAPS`: `conquest-rome-1..3` -> `conquest-map-*`, `knights-map-1..3` -> `knights-map-*`; every segment is resized to 1870 x 841) plus `world-knights.webp` (parchment plate, measured by hand) and `worlds-bg.webp`. Arenas `arena-meadow`, `arena-winter`, `arena-ruins` in `tools/art/arenas.py`.
 - Difficulty tuned for a random-playing player with level-3 cards (about 90 % win at mission 1 down to ~10 % at King Aldric).
 
+## Status and next steps (handoff, v0.24.2)
+
+- Final boss of Age of Knights is the **Warrior Queen** ("Queen Aldra", `bossId: 'warrior-queen'`); `iron-king` art is kept but unused.
+- World 3 "Sands of the East" art is in `art/source/` (not wired up yet): `east-map-1..3.png` (9 painted badges each), `world-east.png` (parchment plate like `world-knights`), `arena-oasis/desert/palace.png` (lane centres still to measure with `arenas.py --check`), bosses `sand-wraith` (m10), `elephant` (m20, landscape portrait), `shah` (m25) with sheets.
+- Towers and castles are drawn by the game (`world.py`, same in every arena); arenas must not contain painted towers. Themed towers per world would need new sheets with 5 damage stages.
+- Next: (1) world 3 like world 2 (`src/campaign/east.js`, `MAPS`/`WORLD_CARDS` in `conquest.py`, `ARENAS`, `_campaign.php`, tune with a stronger player); (2) boss fights: cut the `boss-*-sheet.png` (red/yellow fringe, or painted checkerboard on `shadow-mistress` and `elephant`; see `transparent_sheet.py`) and give each boss its own rule from the design doc.
+- Art still missing: worlds 4 and 5 (maps, world card, arenas) and bosses Ronin, Shogun, Tank, General.
+
 ## Ready-made upload folder
 
 The Cloud86 workflow also force-pushes the packaged `public/` + `private/` to the branch **`cloud86-build`** (one commit, no history; source branch and commit in the message). `private/` only holds `legionroyale.example.php` and a README, never real credentials. Fetch it with `git fetch --depth=1 origin cloud86-build`.
