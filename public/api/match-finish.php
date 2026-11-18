@@ -13,6 +13,16 @@ try {
     $towers = max(0, min(2, (int)($data['towersDestroyed'] ?? 0)));
     $units = max(0, min(300, (int)($data['unitsDeployed'] ?? 0)));
     $win = $result === 'win';
+    // Extra statistieken voor prestaties (begrensd; zelfde vertrouwensmodel als hierboven).
+    $kills = max(0, min(200, (int)($data['kills'] ?? 0)));
+    $killsByType = [];
+    foreach ((array)($data['killsByType'] ?? []) as $t => $n) {
+        if (in_array($t, CARD_TYPES, true)) $killsByType[$t] = max(0, min($kills, (int)$n));
+    }
+    $deployed = array_values(array_unique(array_filter((array)($data['deployedTypes'] ?? []),
+        fn($t) => is_string($t) && in_array($t, CARD_TYPES, true))));
+    $castle = $win && !empty($data['castleDestroyed']);
+    $towersLost = max(0, min(2, (int)($data['towersLost'] ?? 2)));
     $pdo = db();
     $pdo->beginTransaction();
     try {
@@ -42,6 +52,12 @@ try {
         addCoins($pdo, $id, $coins, 'match', $matchId);
         $drops = $win ? rollDrops(3, 2, 5) : rollDrops(1, 1, 2);
         addFragments($pdo, $id, $drops);
+        addCounter($pdo, $id, 'kills', $kills);
+        foreach (['plague', 'assassin', 'flamegi', 'lancer'] as $t) addCounter($pdo, $id, 'kill_' . $t, $killsByType[$t] ?? 0);
+        if ($castle) addCounter($pdo, $id, 'castles', 1);
+        if ($win && $towersLost === 0) addCounter($pdo, $id, 'flawless', 1);
+        if (count($deployed) >= DECK_SIZE) addCounter($pdo, $id, 'full_deck', 1);
+        if ($win) foreach (['spartan', 'banner'] as $t) if (in_array($t, $deployed, true)) addCounter($pdo, $id, 'win_' . $t, 1);
         $new = updateAchievements($pdo, $id);
         $pdo->commit();
     } catch (Throwable $e) { if ($pdo->inTransaction()) $pdo->rollBack(); throw $e; }

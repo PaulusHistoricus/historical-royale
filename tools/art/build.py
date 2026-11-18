@@ -17,6 +17,7 @@ from screens import build_screens
 from reference import build_reference
 from avatars import build_avatars
 from victory import build_victory
+from achievements import build_achievements
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 SRC = os.path.join(ROOT, 'art', 'source') + '/'
@@ -30,6 +31,7 @@ build_effects(SRC, OUT, os.path.join(ROOT, 'src', 'art', 'effects.json'))
 build_screens(SRC, OUT, os.path.join(ROOT, 'src', 'art', 'screens.json'))
 build_avatars(SRC, os.path.join(ROOT, 'public', 'assets'))
 build_victory(SRC, OUT)
+build_achievements(SRC, OUT, os.path.join(ROOT, 'src', 'art', 'achievements.json'))
 build_reference(OUT, os.path.join(ROOT, 'src', 'art', 'units.json'), os.path.join(ROOT, 'art', 'reference'))
 for f in sorted(os.listdir(OUT)):
     print(f'{f:24s} {os.path.getsize(os.path.join(OUT, f)) // 1024:5d} kB')
