@@ -6,5 +6,17 @@
  "arena-sunset": {
   "width": 1920,
   "height": 620
+ },
+ "arena-meadow": {
+  "width": 1920,
+  "height": 620
+ },
+ "arena-winter": {
+  "width": 1920,
+  "height": 620
+ },
+ "arena-ruins": {
+  "width": 1920,
+  "height": 620
  }
 }

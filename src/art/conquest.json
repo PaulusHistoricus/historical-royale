@@ -29,13 +29,35 @@
    "height": 20.93
   }
  },
- "map": {
-  "width": 5430,
-  "height": 841,
-  "tiles": 3,
-  "tileWidth": 1810,
-  "segmentWidth": 1870,
-  "segmentStep": 1780
+ "maps": {
+  "rome": {
+   "tile": "conquest-map",
+   "width": 5430,
+   "height": 841,
+   "tiles": 3,
+   "tileWidth": 1810,
+   "segmentWidth": 1870,
+   "segmentStep": 1780
+  },
+  "knights": {
+   "tile": "knights-map",
+   "width": 5430,
+   "height": 841,
+   "tiles": 3,
+   "tileWidth": 1810,
+   "segmentWidth": 1870,
+   "segmentStep": 1780
+  }
+ },
+ "world-knights": {
+  "width": 760,
+  "height": 570,
+  "plate": {
+   "left": 24.86,
+   "top": 85.17,
+   "width": 50.07,
+   "height": 9.67
+  }
  },
  "mission-panel": {
   "width": 1200,

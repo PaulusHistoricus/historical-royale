@@ -1,7 +1,8 @@
 // Moduskeuze, The Conquest (campagnekaart + missiepaneel) en de Trophy Road-vooruitblik.
 // DOM-schermen boven het Phaser-menu, net als src/screens.js. Regels en gegevens: src/campaign/.
 //
-// Openen:  window.dispatchEvent(new CustomEvent('lr:open', { detail: 'modes' | 'conquest' | 'trophy' }))
+// Openen:  window.dispatchEvent(new CustomEvent('lr:open', { detail: 'modes' | 'worlds' | 'conquest' | 'trophy' }))
+//          'conquest' opent de kaart van de wereld waar je nu bent; 'worlds' het wereldkeuzescherm.
 // Starten: dit bestand stuurt 'lr:start' met { mission } (of { mission: null } voor een los gevecht);
 //          src/main.js start daarop het gevecht.
 import './conquest.css';
@@ -10,9 +11,8 @@ import ART from './art/conquest.json';
 import { BUILD } from './version.js';
 import { account } from './account.js';
 import { ABILITY, unitKinds } from './unit-info.js';
-import { ROME } from './campaign/rome.js';
-import { missionById, missionStatus, currentMission, totalStars, starsOf, withResult, sanitizeProgress,
-  requirement, GOAL_TEXT, conditionText, MAX_STARS } from './campaign/campaign.js';
+import { WORLDS, worldById, worldOf, worldUnlocked, activeWorld, nextMission, allMissions, missionById, missionStatus,
+  currentMission, totalStars, starsOf, withResult, sanitizeProgress, requirement, GOAL_TEXT, conditionText, MAX_STARS } from './campaign/campaign.js';
 
 const BASE = import.meta.env.BASE_URL;
 const art = name => `${BASE}assets/art/${name}.webp?v=${BUILD}`;
@@ -48,9 +48,8 @@ export const conquest = {
   record(missionId, stars) {
     const before = loadProgress(), after = withResult(before, missionId, stars);
     if (onServer()) serverProgress = after; else saveLocal(after);
-    const mission = missionById(missionId);
-    const main = ROME.missions.filter(x => !x.bonus), i = main.indexOf(mission);
-    const next = stars > 0 && i >= 0 && i < main.length - 1 ? main[i + 1].id : null;
+    const following = nextMission(missionById(missionId));
+    const next = stars > 0 && following ? following.id : null;
     return { stars, best: starsOf(after, missionId), firstClear: starsOf(before, missionId) === 0 && stars > 0, next };
   },
   /** Antwoord van match-finish.php: { id, best } is wat de server heeft opgeslagen. */
@@ -69,6 +68,7 @@ shieldFromGame(root);
 let current = null;
 let listeners = null;             // window-luisteraars van het huidige scherm (opruimen bij wisselen)
 let lastMissionId = null;          // om na een gevecht op dezelfde plek op de kaart terug te komen
+let worldId = null;                // gekozen wereld op het keuzescherm (null = de wereld waar je nu bent)
 function show(name, html, onMount) {
   listeners?.abort(); listeners = new AbortController();
   current = name;
@@ -77,7 +77,7 @@ function show(name, html, onMount) {
   onMount?.(root.firstElementChild);
 }
 function close() { listeners?.abort(); listeners = null; current = null; root.innerHTML = ''; }
-function go(where) { ({ menu: close, modes: showModes, conquest: showConquest, trophy: showTrophy })[where]?.(); }
+function go(where) { ({ menu: close, modes: showModes, worlds: showWorlds, conquest: () => showConquest(), trophy: showTrophy })[where]?.(); }
 function toast(msg) {
   const t = document.createElement('div'); t.className = 'lr-toast'; t.textContent = msg;
   document.body.append(t); setTimeout(() => t.classList.add('out'), 2200); setTimeout(() => t.remove(), 2700);
@@ -89,8 +89,9 @@ const plateStyle = p => `left:${p.left}%;top:${p.top}%;width:${p.width}%;height:
 
 // ---------- Choose Your Mode ----------
 function showModes() {
-  const progress = loadProgress(), cur = currentMission(progress);
-  const total = ROME.missions.length * MAX_STARS;
+  const progress = loadProgress(), world = activeWorld(progress), cur = currentMission(progress, world);
+  const total = allMissions().length * MAX_STARS;
+  const allStars = WORLDS.reduce((n, w) => n + totalStars(progress, w), 0);
   const card = (key, mode, title, sub, extra = '') => `
     <button class="cq-mode ${mode}" data-mode="${mode}" style="aspect-ratio:${ART[key].width}/${ART[key].height}">
       <img src="${art(key)}" alt="">
@@ -102,7 +103,7 @@ function showModes() {
     <header class="cq-title"><img src="${art('scroll')}" alt=""><h1>CHOOSE YOUR MODE</h1></header>
     <div class="cq-modes">
       ${card('mode-conquest', 'conquest', 'THE CONQUEST', 'Single-Player Campaign',
-        `<span class="cq-tag">${cur ? `Mission ${cur.n} · ` : 'Completed · '}★ ${totalStars(progress)}/${total}</span>`)}
+        `<span class="cq-tag">${cur ? `${WORLDS.length > 1 ? `World ${WORLDS.indexOf(world) + 1} · ` : ''}Mission ${cur.n} · ` : 'Completed · '}★ ${allStars}/${total}</span>`)}
       ${card('mode-trophy', 'trophy', 'TROPHY ROAD', 'Multiplayer Progression', '<span class="cq-tag soon">Preview · PvP coming soon</span>')}
     </div>
     <div class="cq-modes-low">
@@ -113,7 +114,7 @@ function showModes() {
     el.querySelector('[data-tour]').addEventListener('click', () => window.dispatchEvent(new CustomEvent('lr:open', { detail: 'tour' })));
     el.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => {
       const m = b.dataset.mode;
-      if (m === 'conquest') showConquest();
+      if (m === 'conquest') showWorlds();
       else if (m === 'trophy') showTrophy();
       else if (m === 'quick') start(null);
       else toast('Seasonal Ranked arrives after online battles.');
@@ -121,10 +122,44 @@ function showModes() {
   });
 }
 
+// ---------- The Conquest: wereldkeuze ----------
+// Rome gebruikt de moduskaart als wereldkaart; volgende werelden hebben een eigen kaart (`world.card`).
+function showWorlds() {
+  const progress = loadProgress(), here = activeWorld(progress);
+  const cards = WORLDS.map((w, i) => {
+    const key = w.card ?? 'mode-conquest', open = worldUnlocked(progress, w), cur = currentMission(progress, w);
+    const max = w.missions.length * MAX_STARS, stars = totalStars(progress, w);
+    const need = !open && missionById(requirement(w.missions.find(x => !x.bonus)));
+    const tag = !open ? `🔒 Defeat “${esc(need.title)}”` : cur ? `Mission ${cur.n} · ★ ${stars}/${max}` : `Completed · ★ ${stars}/${max}`;
+    return `<button class="cq-mode cq-world${open ? '' : ' locked'}${w === here ? ' here' : ''}${w.card ? ' parchment' : ''}" data-world="${w.id}"
+      style="aspect-ratio:${ART[key].width}/${ART[key].height}">
+      <img src="${art(key)}" alt="">
+      <span class="cq-plate" style="${plateStyle(ART[key].plate)}"><b>${esc(w.title)}</b></span>
+      <span class="cq-sub">World ${i + 1}</span>
+      <span class="cq-tag${open ? '' : ' soon'}">${tag}</span></button>`;
+  }).join('');
+  show('worlds', `
+    <div class="cq-bg" style="background-image:url(${art('worlds-bg')})"></div>
+    <header class="cq-title"><img src="${art('scroll')}" alt=""><h1>THE CONQUEST</h1></header>
+    <div class="cq-modes cq-worlds">${cards}</div>
+    <p class="cq-more">More worlds are on their way: Sands of the East, Way of the Samurai and World at War.</p>
+    ${backButton('modes')}`, el => {
+    el.querySelectorAll('[data-world]').forEach(b => b.addEventListener('click', () => {
+      const w = worldById(b.dataset.world);
+      if (!worldUnlocked(loadProgress(), w)) {
+        const need = missionById(requirement(w.missions.find(x => !x.bonus)));
+        toast(`Locked — defeat “${need.title}” in ${worldOf(need).title} first.`);
+        return;
+      }
+      worldId = w.id;
+      showConquest(null, w.id);
+    }));
+  });
+}
+
 // ---------- The Conquest: kaart ----------
-const MAP = ART.map;
-const nodeX = m => 100 * ((m.seg - 1) * MAP.segmentStep + m.x) / MAP.width;
-const nodeY = m => 100 * m.y / MAP.height;
+const nodeX = (m, MAP) => 100 * ((m.seg - 1) * MAP.segmentStep + m.x) / MAP.width;
+const nodeY = (m, MAP) => 100 * m.y / MAP.height;
 function nodeArt(mission, status, isCurrent) {
   if (status === 'locked') return 'node-locked';
   if (mission.boss) return 'node-boss';
@@ -133,33 +168,39 @@ function nodeArt(mission, status, isCurrent) {
   return isCurrent ? 'node-current' : 'node-open';
 }
 
-function showConquest(focusId = lastMissionId) {
-  const progress = loadProgress(), cur = currentMission(progress);
-  const total = ROME.missions.length * MAX_STARS;
-  const nodes = ROME.missions.map(m => {
+function showConquest(focusId = lastMissionId, id = null) {
+  const progress = loadProgress();
+  // Welke wereld: expliciet gekozen, anders die van de laatst gespeelde missie, anders de wereld waar je nu bent.
+  const focusWorld = focusId && worldOf(missionById(focusId));
+  const world = worldById(id) ?? focusWorld ?? worldById(worldId) ?? activeWorld(progress);
+  if (focusWorld !== world) focusId = null;
+  worldId = world.id;
+  const MAP = ART.maps[world.id], cur = currentMission(progress, world);
+  const total = world.missions.length * MAX_STARS;
+  const nodes = world.missions.map(m => {
     const status = missionStatus(progress, m), isCur = cur?.id === m.id, stars = starsOf(progress, m.id);
     return `<button class="cq-node ${status}${isCur ? ' current' : ''}${m.boss ? ' boss' : ''}${m.bonus ? ' bonus' : ''}"
-      data-id="${m.id}" style="left:${nodeX(m).toFixed(3)}%;top:${nodeY(m).toFixed(2)}%" aria-label="Mission ${m.n}: ${esc(m.title)}">
+      data-id="${m.id}" style="left:${nodeX(m, MAP).toFixed(3)}%;top:${nodeY(m, MAP).toFixed(2)}%" aria-label="Mission ${m.n}: ${esc(m.title)}">
       <img src="${art(nodeArt(m, status, isCur))}" alt="" draggable="false">
       <span class="cq-num">${m.n}</span>${status === 'done' ? starRow(stars) : ''}</button>`;
   }).join('');
   // Stippellijn van het hoofdpad naar een bonusmissie.
-  const links = ROME.missions.filter(m => m.bonus).map(m => {
+  const links = world.missions.filter(m => m.bonus).map(m => {
     const from = missionById(requirement(m));
     const gx = x => (x.seg - 1) * MAP.segmentStep + x.x;
     return `<line x1="${gx(from)}" y1="${from.y}" x2="${gx(m)}" y2="${m.y}" class="${missionStatus(progress, m)}"/>`;
   }).join('');
   show('conquest', `
     <div class="cq-scroll"><div class="cq-map" style="aspect-ratio:${MAP.width}/${MAP.height}">
-      ${Array.from({ length: MAP.tiles }, (_, i) => `<img class="cq-tile" src="${art('conquest-map-' + (i + 1))}" alt="" draggable="false"
+      ${Array.from({ length: MAP.tiles }, (_, i) => `<img class="cq-tile" src="${art(MAP.tile + '-' + (i + 1))}" alt="" draggable="false"
         style="left:${100 * i / MAP.tiles}%;width:${100 / MAP.tiles + 0.02}%">`).join('')}
       <svg class="cq-links" viewBox="0 0 ${MAP.width} ${MAP.height}" preserveAspectRatio="none">${links}</svg>
-      ${ROME.regions.map((r, i) => `<span class="cq-region" style="left:${100 * (i * MAP.segmentStep + MAP.segmentWidth / 2) / MAP.width}%">${esc(r)}</span>`).join('')}
+      ${world.regions.map((r, i) => `<span class="cq-region" style="left:${100 * (i * MAP.segmentStep + MAP.segmentWidth / 2) / MAP.width}%">${esc(r)}</span>`).join('')}
       ${nodes}
     </div></div>
-    <header class="cq-mapbar"><b>THE CONQUEST</b><span>${esc(ROME.title)}</span>
-      <em><img src="${art('star-full')}" alt=""> ${totalStars(progress)} / ${total}</em></header>
-    ${backButton('modes')}`, el => {
+    <header class="cq-mapbar"><b>THE CONQUEST</b><span>${esc(world.title)}</span>
+      <em><img src="${art('star-full')}" alt=""> ${totalStars(progress, world)} / ${total}</em></header>
+    ${backButton('worlds', 'Worlds')}`, el => {
     const scroller = el.querySelector('.cq-scroll');
     const centre = id => {
       const node = id && el.querySelector(`[data-id="${id}"]`);
@@ -167,7 +208,7 @@ function showConquest(focusId = lastMissionId) {
     };
     // Een nog niet gehaalde missie die je net speelde blijft in beeld; anders de huidige missie.
     const retry = focusId && starsOf(progress, focusId) === 0 ? focusId : null;
-    requestAnimationFrame(() => centre(retry ?? cur?.id ?? focusId ?? ROME.missions.filter(m => !m.bonus).at(-1).id));
+    requestAnimationFrame(() => centre(retry ?? cur?.id ?? focusId ?? world.missions.filter(m => !m.bonus).at(-1).id));
     // Muis: slepen en scrollwiel verschuiven de kaart (aanraken schuift vanzelf).
     let drag = null, dragged = false;
     scroller.addEventListener('pointerdown', e => { if (e.pointerType === 'mouse') { drag = { x: e.clientX, left: scroller.scrollLeft }; dragged = false; } });
@@ -183,7 +224,8 @@ function showConquest(focusId = lastMissionId) {
       const mission = missionById(b.dataset.id);
       if (missionStatus(loadProgress(), mission) === 'locked') {
         const need = missionById(requirement(mission));
-        toast(`Locked — complete mission ${need.n} “${need.title}” first.`);
+        toast(worldOf(need) === world ? `Locked — complete mission ${need.n} “${need.title}” first.`
+          : `Locked — defeat “${need.title}” in ${worldOf(need).title} first.`);
         return;
       }
       showMission(mission);
@@ -193,13 +235,13 @@ function showConquest(focusId = lastMissionId) {
 
 // ---------- Missiepaneel ----------
 function showMission(mission) {
-  const best = starsOf(loadProgress(), mission.id);
+  const best = starsOf(loadProgress(), mission.id), world = worldOf(mission);
   const panel = document.createElement('div');
   panel.className = 'cq-modal';
   panel.innerHTML = `
-    <div class="cq-panel" style="aspect-ratio:${ART['mission-panel'].width}/${ART['mission-panel'].height};background-image:url(${art('mission-panel')})">
+    <div class="cq-panel${mission.bossId ? ' has-boss' : ''}" style="aspect-ratio:${ART['mission-panel'].width}/${ART['mission-panel'].height};background-image:url(${art('mission-panel')})">
       <div class="cq-panel-in">
-        <p class="cq-kicker">${mission.bonus ? 'Bonus mission' : mission.boss ? `Mission ${mission.n} · Boss` : `Mission ${mission.n}`} · ${esc(ROME.regions[mission.seg - 1])}</p>
+        <p class="cq-kicker">${mission.bonus ? 'Bonus mission' : mission.boss ? `Mission ${mission.n} · Boss` : `Mission ${mission.n}`} · ${esc(world.regions[mission.seg - 1])}</p>
         <h2>${esc(mission.title)}</h2>
         <p class="cq-brief">${esc(mission.brief)}</p>
         <div class="cq-cols">
@@ -207,7 +249,7 @@ function showMission(mission) {
             <ul class="cq-conds">${mission.stars.map((c, i) => `<li class="${i < best ? 'got' : ''}"><img src="${art(i < best ? 'star-full' : 'star-empty')}" alt="">${esc(conditionText(c))}</li>`).join('')}</ul>
           </div>
           <div><h3>Enemy · Level ${mission.enemy.level}</h3>
-            <div class="cq-enemy${mission.enemy.deck.length > 6 ? ' many' : ''}">${mission.enemy.deck.map(t => `<span title="${esc(`${CARD_NAMES[t]} · ${unitKinds(t).join(' · ')} — ${ABILITY[t] ?? ''}`)}">${cardPortrait(t)}<em class="cq-kind ${unitKinds(t)[0].toLowerCase()}${unitKinds(t).includes('Special') ? ' special' : ''}">${unitKinds(t).map(k => k[0]).join('')}</em></span>`).join('')}</div>
+            <div class="cq-enemy${mission.enemy.deck.length > 5 ? ' many' : mission.enemy.deck.length > 4 ? ' five' : ''}">${mission.enemy.deck.map(t => `<span title="${esc(`${CARD_NAMES[t]} · ${unitKinds(t).join(' · ')} — ${ABILITY[t] ?? ''}`)}">${cardPortrait(t)}<em class="cq-kind ${unitKinds(t)[0].toLowerCase()}${unitKinds(t).includes('Special') ? ' special' : ''}">${unitKinds(t).map(k => k[0]).join('')}</em></span>`).join('')}</div>
             ${mission.player?.rate < 1 ? '<p class="cq-warn">Your energy returns more slowly here.</p>' : ''}
             ${mission.enemy.start > 6 ? '<p class="cq-warn">The enemy starts with extra energy.</p>' : ''}
           </div>
@@ -215,6 +257,7 @@ function showMission(mission) {
         <button class="cq-start"><img src="${art('result-button')}" alt=""><span>${best ? 'PLAY AGAIN' : 'START'}</span></button>
       </div>
       <button class="cq-x" aria-label="Close">✕</button>
+      ${mission.bossId ? `<img class="cq-boss" src="${art('boss-' + mission.bossId)}" alt="">` : ''}
     </div>`;
   root.querySelector('.cq-screen').append(panel);
   const shut = () => panel.remove();
@@ -257,7 +300,7 @@ function showTrophy() {
 // Opnieuw tekenen als de voortgang van de server binnenkomt terwijl een scherm open is (niet tijdens een missiepaneel).
 function refresh() {
   if (root.querySelector('.cq-modal')) return;
-  if (current === 'modes') showModes(); else if (current === 'conquest') showConquest();
+  if (current === 'modes') showModes(); else if (current === 'worlds') showWorlds(); else if (current === 'conquest') showConquest();
 }
 // 'lr:session' komt bij elke profielwijziging; alleen ophalen als er een andere speler (of gast) is.
 let syncedFor;
@@ -267,6 +310,6 @@ window.addEventListener('lr:session', () => {
   syncedFor = who;
   syncWithServer();
 });
-window.addEventListener('lr:open', e => { if (['modes', 'conquest', 'trophy'].includes(e.detail)) go(e.detail); });
+window.addEventListener('lr:open', e => { if (['modes', 'worlds', 'conquest', 'trophy'].includes(e.detail)) go(e.detail); });
 window.addEventListener('lr:battle', close);
 export const conquestScreens = { isOpen: () => current !== null, close };

@@ -26,6 +26,9 @@ OUT_W, OUT_H = 1920, 620     # textuur (2x wereld)
 ARENAS = {
     'arena-rome': ('arena-rome.png', 393, 653, 40),      # stad: Colosseum, tempels, stenen paden
     'arena-sunset': ('arena-sunset.png', 445, 680, 52),  # platteland: aquaduct, ruïnes, zandbanen
+    'arena-meadow': ('arena-meadow.png', 437, 645, 45),  # Age of Knights: toernooiweide, lelievaandels
+    'arena-winter': ('arena-winter.png', 450, 640, 45),  # Age of Knights: besneeuwd veld, burcht op de achtergrond
+    'arena-ruins': ('arena-ruins.png', 428, 622, 45),    # Age of Knights: ruïnes in de sneeuw, vuurschalen
 }
 
 

@@ -6,7 +6,8 @@ import { createBattle, battleRules, deploy, step, mulberry32 } from '../src/sim/
 import { CARDS, MATCH_SECONDS, OVERTIME_AT, ENERGY_START, ENERGY_MAX, LANES, DEPLOY_ZONE } from '../src/sim/config.js';
 import { CARD_TYPES } from '../src/progression.js';
 import { ROME } from '../src/campaign/rome.js';
-import { WORLDS, allMissions, missionById, requirement, isUnlocked, missionStatus, currentMission, totalStars,
+import { KNIGHTS } from '../src/campaign/knights.js';
+import { WORLDS, worldOf, worldById, worldUnlocked, activeWorld, nextMission, allMissions, missionById, requirement, isUnlocked, missionStatus, currentMission, totalStars,
   missionRules, enemyLevels, conditionMet, starsFor, withResult, sanitizeProgress, conditionText, GOAL_TEXT, arenaFor } from '../src/campaign/campaign.js';
 import MAP from '../src/art/conquest.json' with { type: 'json' };
 import ARENAS from '../src/art/arenas.json' with { type: 'json' };
@@ -116,13 +117,14 @@ test('Rise of Rome: 25 hoofdmissies + 2 bonusmissies met vaste, unieke id\'s', (
   assert.deepEqual(bonus.map(x => x.id), ['rome_bonus_01', 'rome_bonus_02']);
   assert.equal(new Set(allMissions().map(x => x.id)).size, allMissions().length);
   assert.equal(main.at(-1).boss, true);
+  assert.deepEqual(main.filter(x => x.boss).map(x => x.bossId), ['vercix', 'tigris', 'ferox']);
   assert.equal(missionById('rome_025').title, 'The Dark Fortress');
   assert.equal(missionById('nope'), null);
 });
 
 test('elke missie is geldig: bestaande kaarten, speelbare regels, plek op de kaart', () => {
-  const seg = MAP.map.segmentWidth;
   for (const x of allMissions()) {
+    const map = MAP.maps[worldOf(x).id], seg = map.segmentWidth;
     const rules = battleRules(missionRules(x));                       // gooit bij een onbekende kaart of doel
     assert.ok(x.enemy.deck.every(t => CARD_TYPES.includes(t)), x.id);
     assert.ok(new Set(x.enemy.deck).size === x.enemy.deck.length, `${x.id}: dubbele kaart`);
@@ -138,22 +140,51 @@ test('elke missie is geldig: bestaande kaarten, speelbare regels, plek op de kaa
       if (c.startsWith('time:')) assert.ok(Number(c.slice(5)) < x.time && x.goal !== 'survive', `${x.id}: ${c} moet sneller zijn dan de limiet`);
     }
     assert.ok(GOAL_TEXT[x.goal](x).length > 10);
-    assert.ok([1, 2, 3].includes(x.seg) && x.x >= 40 && x.x <= seg - 40 && x.y >= 120 && x.y <= MAP.map.height - 60, `${x.id}: buiten de kaart`);
+    assert.ok([1, 2, 3].includes(x.seg) && x.x >= 40 && x.x <= seg - 40 && x.y >= 120 && x.y <= map.height - 60, `${x.id}: buiten de kaart`);
     assert.ok(x.title && x.brief, x.id);
     assert.equal(Object.keys(enemyLevels(x)).length, CARDS.length);
   }
 });
 
 test('missies staan niet op elkaar en lopen van links naar rechts over de kaart', () => {
-  const gx = x => (x.seg - 1) * MAP.map.segmentStep + x.x;
-  const all = allMissions();
-  for (const a of all) for (const b of all) {
-    if (a === b) continue;
-    assert.ok(Math.hypot(gx(a) - gx(b), a.y - b.y) >= 120, `${a.id} en ${b.id} staan te dicht op elkaar`);
+  for (const world of WORLDS) {
+    const map = MAP.maps[world.id];
+    assert.ok(map, `${world.id}: geen kaart in conquest.json`);
+    const gx = x => (x.seg - 1) * map.segmentStep + x.x;
+    const all = world.missions;
+    for (const a of all) for (const b of all) {
+      if (a === b) continue;
+      assert.ok(Math.hypot(gx(a) - gx(b), a.y - b.y) >= 120, `${a.id} en ${b.id} staan te dicht op elkaar`);
+    }
+    const main = all.filter(x => !x.bonus);
+    for (let i = 1; i < main.length - 1; i++) assert.ok(gx(main[i]) > gx(main[i - 1]), main[i].id);
+    assert.ok(gx(main.at(-1)) <= map.width - 40);
   }
-  const main = ROME.missions.filter(x => !x.bonus);
-  for (let i = 1; i < main.length - 1; i++) assert.ok(gx(main[i]) > gx(main[i - 1]), main[i].id);
-  assert.ok(gx(main.at(-1)) <= MAP.map.width - 40);
+});
+
+test('Age of Knights: 25 + 2 missies, vaste id\'s, drie bazen, open na de laatste missie van Rome', () => {
+  const main = KNIGHTS.missions.filter(x => !x.bonus), bonus = KNIGHTS.missions.filter(x => x.bonus);
+  assert.equal(main.length, 25);
+  assert.deepEqual(bonus.map(x => x.id), ['knights_bonus_01', 'knights_bonus_02']);
+  main.forEach((x, i) => { assert.equal(x.id, 'knights_' + String(i + 1).padStart(3, '0')); assert.equal(x.n, i + 1); });
+  assert.deepEqual(main.filter(x => x.boss).map(x => x.n), [10, 20, 25]);
+  for (const x of main.filter(x => x.boss)) assert.ok(readFileSync(new URL(`../art/source/bosses/boss-${x.bossId}.png`, import.meta.url)).length > 0, x.bossId);
+  assert.equal(requirement(main[0]), 'rome_025');
+  assert.equal(worldOf(main[0]), KNIGHTS);
+  assert.equal(worldById('knights'), KNIGHTS);
+  // Werelden openen op volgorde; de actieve wereld is de laatste open wereld.
+  assert.equal(worldUnlocked({}, ROME), true);
+  assert.equal(worldUnlocked({}, KNIGHTS), false);
+  assert.equal(activeWorld({}), ROME);
+  assert.equal(activeWorld({ rome_025: 1 }), KNIGHTS);
+  assert.equal(currentMission({ rome_025: 1 }, KNIGHTS).id, 'knights_001');
+  // Volgende missie over de grens van een wereld heen.
+  assert.equal(nextMission(missionById('rome_024')).id, 'rome_025');
+  assert.equal(nextMission(missionById('rome_025')).id, 'knights_001');
+  assert.equal(nextMission(missionById('knights_025')), null);
+  assert.equal(nextMission(missionById('rome_bonus_01')), null);
+  // Opgeslagen voortgang van wereld 2 blijft bewaard.
+  assert.deepEqual(sanitizeProgress({ knights_003: 2, knights_bonus_02: 3 }), { knights_003: 2, knights_bonus_02: 3 });
 });
 
 // ---------- vrijspelen en sterren ----------
@@ -238,12 +269,14 @@ test('alle 27 missies lopen tot een einde zonder vastlopers (willekeurige speler
     assert.ok(['blue', 'red'].includes(s.winner), mission.id);
     assert.ok(starsFor(mission, s) >= (s.winner === 'blue' ? 1 : 0));
   }
-  assert.equal(WORLDS.length, 1);
+  assert.equal(WORLDS.length, 2);
 });
 
 test('elke missie speelt in een bestaande arena; elk gebied heeft er een', () => {
   const known = new Set(['arena', ...Object.keys(ARENAS)]);
-  assert.equal(ROME.arenas.length, ROME.regions.length);
+  for (const w of WORLDS) assert.equal(w.arenas.length, w.regions.length, w.id);
+  assert.equal(arenaFor(missionById('knights_001')), 'arena-meadow');
+  assert.equal(arenaFor(missionById('knights_025')), 'arena-ruins');
   for (const x of allMissions()) assert.ok(known.has(arenaFor(x)), `${x.id}: onbekende arena ${arenaFor(x)}`);
   assert.equal(arenaFor(missionById('rome_001')), 'arena');
   assert.equal(arenaFor(missionById('rome_012')), 'arena-sunset');
@@ -255,9 +288,12 @@ test('elke missie speelt in een bestaande arena; elk gebied heeft er een', () =>
 test('server (public/api/_campaign.php) kent dezelfde missies en volgorde als het spel', () => {
   const php = readFileSync(new URL('../public/api/_campaign.php', import.meta.url), 'utf8');
   const list = name => [...php.match(new RegExp(`const ${name} = \\[([^\\]]*)\\]`))[1].matchAll(/'([a-z_0-9]+)'/g)].map(m => m[1]);
-  assert.deepEqual(list('CAMPAIGN_MAIN'), ROME.missions.filter(x => !x.bonus).map(x => x.id));
+  assert.deepEqual(list('CAMPAIGN_MAIN'), allMissions().filter(x => !x.bonus).map(x => x.id));
   const bonus = list('CAMPAIGN_BONUS');                     // sleutel, waarde, sleutel, waarde
   const pairs = Object.fromEntries(bonus.flatMap((v, i) => (i % 2 ? [] : [[v, bonus[i + 1]]])));
-  assert.deepEqual(pairs, Object.fromEntries(ROME.missions.filter(x => x.bonus).map(x => [x.id, requirement(x)])));
+  assert.deepEqual(pairs, Object.fromEntries(allMissions().filter(x => x.bonus).map(x => [x.id, requirement(x)])));
+  // De server opent een hoofdmissie na de vorige in CAMPAIGN_MAIN; dat moet overeenkomen met het spel.
+  const main = list('CAMPAIGN_MAIN');
+  main.forEach((id, i) => assert.equal(requirement(missionById(id)), i ? main[i - 1] : null, id));
   assert.match(php, /const MISSION_STAR_COINS = \d+;/);
 });

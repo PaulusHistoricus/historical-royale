@@ -38,6 +38,17 @@
 .cq-tag.soon { color: #f6e7c8; background: #2a1b0ee6; border-color: #b48d4c; }
 .cq-modes { margin-bottom: calc(var(--u) * 2); }
 .cq-mode.ranked { width: calc(var(--u) * 19); margin-bottom: calc(var(--u) * 2); }
+
+/* ---------- Wereldkeuze ---------- */
+.cq-screen[data-screen='worlds'] { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--u) * 1.2); }
+.cq-worlds { gap: calc(var(--u) * 4); align-items: center; }
+.cq-world { width: calc(var(--u) * 33); }
+.cq-world.here > img { filter: drop-shadow(0 0 calc(var(--u) * 1.6) #ffcf6acc) drop-shadow(0 10px 18px #000c); }
+.cq-world.locked > img { filter: grayscale(.85) brightness(.55) drop-shadow(0 10px 18px #000c); }
+.cq-world.locked:hover { transform: none; }
+.cq-world.parchment .cq-plate b { font-size: calc(var(--u) * 1.45); background: none; -webkit-text-fill-color: #5a2a0c; color: #5a2a0c; filter: drop-shadow(0 1px 0 #fff3cf99); }
+.cq-world.locked.parchment .cq-plate b { -webkit-text-fill-color: #e9d9b4; color: #e9d9b4; filter: drop-shadow(0 1px 1px #000); }
+.cq-more { margin: calc(var(--u) * 2.4) 0 0; font-size: calc(var(--u) * 1.4); font-style: italic; color: #e7d3a6; text-shadow: 0 2px 4px #000; }
 .cq-mode.ranked > img { filter: saturate(.75) drop-shadow(0 8px 14px #000c); }
 .cq-mode.ranked .cq-plate b { font-size: calc(var(--u) * 1.02); letter-spacing: .05em; }
 .cq-mode.ranked .cq-sub { font-size: calc(var(--u) * 1.3); color: #cbb58a; }
@@ -84,6 +95,10 @@
 @keyframes cqFade { from { opacity: 0; } }
 .cq-panel { position: relative; width: min(94vw, 142dvh, 1000px); background: center / 100% 100% no-repeat; container-type: inline-size;
   filter: drop-shadow(0 14px 30px #000c); }
+.cq-panel.has-boss { width: min(76vw, 108dvh, 820px); transform: translateX(22%); }   /* ruimte links voor de baas */
+.cq-boss { position: absolute; right: 99%; bottom: 3%; height: 104%; width: auto; pointer-events: none;
+  filter: drop-shadow(0 10px 18px #000c); animation: cqBoss .35s ease-out; }
+@keyframes cqBoss { from { opacity: 0; transform: translateX(-12%); } }
 .cq-panel-in { position: absolute; left: 13.5%; right: 13.5%; top: 25%; bottom: 12.5%; display: flex; flex-direction: column; color: #3d240f; text-align: center; }
 .cq-kicker { margin: 0; font: bold 1.9cqw Georgia, serif; letter-spacing: .12em; text-transform: uppercase; color: #8a4a16; }
 .cq-panel h2 { margin: .05em 0 0; font-size: 4.1cqw; line-height: 1.05; color: #5a1d0a; letter-spacing: .03em; text-shadow: 0 1px 0 #fff4d299; }
@@ -98,7 +113,8 @@
 .cq-enemy { display: flex; flex-wrap: wrap; gap: .9cqw; }
 .cq-enemy > span { position: relative; width: 6.6cqw; aspect-ratio: 3 / 4; overflow: hidden; border-radius: .7cqw; background: #1b120b;
   border: .3cqw solid #b8842f; box-shadow: 0 .3cqw .5cqw #0007; }
-.cq-enemy.many > span { width: 5cqw; }
+.cq-enemy.five > span { width: 5.2cqw; }
+.cq-enemy.many > span { width: 4.4cqw; }
 .cq-warn { margin: .7cqw 0 0; font: bold 1.75cqw Georgia, serif; color: #8f1d10; }
 .cq-start { position: relative; align-self: center; flex: none; width: 32cqw; margin-top: .6cqw; padding: 0; border: 0; background: none; }
 .cq-start img { display: block; width: 100%; height: auto; pointer-events: none; }
