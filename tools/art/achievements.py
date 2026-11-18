@@ -9,15 +9,18 @@ SIZE = 128
 # Volgorde in het bronvel, rij voor rij = volgorde van ACHIEVEMENTS in public/api/_game.php.
 SHEETS = [('prestaties-1.png', ['first_win', 'wins_10', 'wins_50', 'wins_200', 'matches_10', 'matches_100',
     'towers_10', 'towers_100', 'units_250', 'units_2000', 'streak_3', 'streak_10',
-    'level_5', 'level_10', 'level_25', 'card_3', 'card_6'])]
+    'level_5', 'level_10', 'level_25', 'card_3', 'card_6']),
+    ('prestaties-2.png', ['wins_100', 'matches_500', 'towers_500', 'streak_25', 'level_50', 'castle_1', 'castle_25',
+    'flawless_1', 'flawless_25', 'kills_500', 'kills_5000', 'full_deck', 'upgraded_12', 'friends_1',
+    'friends_10', 'spartan_10', 'banner_10', 'plague_50', 'assassin_50', 'flamegi_100', 'lancer_50'])]
 
 
 def _icons(path):
     a = np.array(Image.open(path).convert('RGBA'))
     fg = (a[..., 3] > 40) & (a[..., :3].min(2) < 235)
     out = []
-    for y0, y1 in [r for r in bands(fg.sum(1), 5, 10) if r[1] - r[0] > 100]:
-        for x0, x1 in [c for c in bands(fg[y0:y1].sum(0), 5, 8) if c[1] - c[0] > 100]:
+    for y0, y1 in [r for r in bands(fg.sum(1), 5, 4) if r[1] - r[0] > 100]:
+        for x0, x1 in [c for c in bands(fg[y0:y1].sum(0), 5, 4) if c[1] - c[0] > 100]:
             sub = a[y0:y1, x0:x1].copy()
             sub[..., 3] = np.where(sub[..., 3] < 24, 0, sub[..., 3])
             side = max(sub.shape[:2])
