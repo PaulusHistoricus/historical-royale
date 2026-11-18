@@ -1,6 +1,6 @@
 {
  "size": 128,
- "count": 17,
+ "count": 38,
  "icons": {
   "first_win": 0,
   "wins_10": 1,
@@ -18,6 +18,27 @@
   "level_10": 13,
   "level_25": 14,
   "card_3": 15,
-  "card_6": 16
+  "card_6": 16,
+  "wins_100": 17,
+  "matches_500": 18,
+  "towers_500": 19,
+  "streak_25": 20,
+  "level_50": 21,
+  "castle_1": 22,
+  "castle_25": 23,
+  "flawless_1": 24,
+  "flawless_25": 25,
+  "kills_500": 26,
+  "kills_5000": 27,
+  "full_deck": 28,
+  "upgraded_12": 29,
+  "friends_1": 30,
+  "friends_10": 31,
+  "spartan_10": 32,
+  "banner_10": 33,
+  "plague_50": 34,
+  "assassin_50": 35,
+  "flamegi_100": 36,
+  "lancer_50": 37
  }
 }

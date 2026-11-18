@@ -15,14 +15,9 @@ const NAMES = { melee: 'Legionary', archer: 'Archer', cannon: 'Cannon', cavalry:
   horse_archer: 'Horse Archer', musket: 'Musketeer', healer: 'Priestess', samurai: 'Samurai', spy: 'Spy',
   firethrower: 'Fire Thrower', p51: 'P-51 Mustang',
   spartan: 'Spartan Guardian', plague: 'Plague Doctor', banner: 'Banner Maiden', flamegi: 'Flamethrower GI', lancer: 'Steppe Lancer', assassin: 'Persian Assassin' };
-// Prestatie-icoon uit achievements.webp; nieuwe prestaties zonder eigen icoon lenen er tijdelijk één.
-const ACH_FALLBACK = { wins_100: 'wins_50', matches_500: 'matches_100', towers_500: 'towers_100', streak_25: 'streak_10',
-  level_50: 'level_25', castle_1: 'towers_100', castle_25: 'towers_100', flawless_1: 'matches_10', flawless_25: 'matches_10',
-  kills_500: 'matches_100', kills_5000: 'matches_100', full_deck: 'units_2000', upgraded_12: 'card_3', friends_1: 'units_250',
-  friends_10: 'units_2000', spartan_10: 'matches_10', banner_10: 'units_250', plague_50: 'streak_10', assassin_50: 'streak_10',
-  flamegi_100: 'streak_10', lancer_50: 'streak_10' };
+// Prestatie-icoon uit achievements.webp (tools/art/achievements.py).
 function achIcon(key, unlocked, px = 52) {
-  const i = ACH_ART.icons[key] ?? ACH_ART.icons[ACH_FALLBACK[key]] ?? 0;
+  const i = ACH_ART.icons[key] ?? 0;
   return `<span class="lr-ach-icon${unlocked ? '' : ' locked'}" style="width:${px}px;height:${px}px;background:url(${BASE}assets/art/achievements.webp?v=${BUILD})
     ${-i * px}px 0 / ${ACH_ART.count * px}px ${px}px">${unlocked ? '' : '<i>🔒</i>'}</span>`;
 }
