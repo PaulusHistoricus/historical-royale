@@ -1,0 +1,24 @@
+LEGION ROYALE - CLOUD86 / PLESK
+
+Deploy to https://legionroyale.paulushistoricus.nl/
+
+1. Upload the CONTENTS of public/ to the subdomain httpdocs/ folder,
+   replacing the previous index.html, assets/ and api/ files.
+2. Put private/ NEXT TO httpdocs, NEVER INSIDE it.
+3. Inside the server's private/ folder create legionroyale.php using
+   legionroyale.example.php as a template. Set REAL credentials there.
+   There is no sensitive secret in this downloadable ZIP.
+4. Import database/schema.sql in Plesk phpMyAdmin. The schema is
+   in the GitHub repository, not in this public web folder.
+5. Create an OAuth Web client in Google Cloud:
+   Redirect URI (exact):
+   https://legionroyale.paulushistoricus.nl/api/google-callback.php
+6. Check https://legionroyale.paulushistoricus.nl/api/me.php
+   returns JSON, not downloadable PHP code.
+7. See docs/auth-deployment.md for full installation and safety notes.
+
+Google login is NOT ACTIVE until database, configuration and
+Google OAuth consent screen are set up.
+The game currently plays against AI; PvP WebSockets are NOT live.
+
+Source: github.com/PaulusHistoricus/historical-royale
