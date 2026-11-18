@@ -33,7 +33,38 @@ const ACHIEVEMENTS = [
     'level_25'    => ['Consul', 'Reach level 25', 'level', 25],
     'card_3'      => ['Armourer', 'Upgrade a card to level 3', 'max_card_level', 3],
     'card_6'      => ['Master Smith', 'Upgrade a card to level 6', 'max_card_level', 6],
+    // v0.18: meer doelen
+    'wins_100'    => ['Praetor', 'Win 100 battles', 'wins', 100],
+    'matches_500' => ['Legend of the Arena', 'Fight 500 battles', 'matches_played', 500],
+    'towers_500'  => ['Wall Breaker', 'Destroy 500 enemy towers', 'towers_destroyed', 500],
+    'streak_25'   => ['Invincible', 'Win 25 battles in a row', 'best_streak', 25],
+    'level_50'    => ['Emperor', 'Reach level 50', 'level', 50],
+    'castle_1'    => ['Sack the City', 'Destroy the enemy castle', 'castles', 1],
+    'castle_25'   => ['Conqueror', 'Destroy 25 enemy castles', 'castles', 25],
+    'flawless_1'  => ['Untouchable', 'Win without losing a tower', 'flawless', 1],
+    'flawless_25' => ['Impregnable', 'Win 25 battles without losing a tower', 'flawless', 25],
+    'kills_500'   => ['Slayer', 'Defeat 500 enemy units', 'kills', 500],
+    'kills_5000'  => ['Scourge of Empires', 'Defeat 5,000 enemy units', 'kills', 5000],
+    'full_deck'   => ['Full Arsenal', 'Deploy all 8 cards of your deck in one battle', 'full_deck', 1],
+    'upgraded_12' => ['Quartermaster', 'Upgrade 12 different cards', 'cards_upgraded', 12],
+    'friends_1'   => ['Comrade', 'Add your first friend', 'friends', 1],
+    'friends_10'  => ['Senate', 'Have 10 friends', 'friends', 10],
+    'spartan_10'  => ['Thermopylae', 'Win 10 battles with a Spartan Guardian on the field', 'win_spartan', 10],
+    'banner_10'   => ['Raise the Banner', 'Win 10 battles with a Banner Maiden on the field', 'win_banner', 10],
+    'plague_50'   => ['Black Death', 'Defeat 50 enemies with the Plague Doctor', 'kill_plague', 50],
+    'assassin_50' => ['Silk and Steel', 'Defeat 50 enemies with the Persian Assassin', 'kill_assassin', 50],
+    'flamegi_100' => ['Scorched Earth', 'Defeat 100 enemies with the Flamethrower GI', 'kill_flamegi', 100],
+    'lancer_50'   => ['Steppe Thunder', 'Defeat 50 enemies with the Steppe Lancer', 'kill_lancer', 50],
 ];
+// Tellers zonder eigen kolom staan als verborgen rijen in player_achievements ('_c_<naam>'):
+// zo is er geen databasemigratie nodig.
+const COUNTER_PREFIX = '_c_';
+/** Telt $n op bij teller $name (bijv. 'kills', 'kill_lancer'). */
+function addCounter(PDO $pdo, int $playerId, string $name, int $n): void {
+    if ($n <= 0) return;
+    $pdo->prepare('INSERT INTO player_achievements(player_id, achievement_key, progress, unlocked_at) VALUES(?,?,?,NULL)
+        ON DUPLICATE KEY UPDATE progress = progress + VALUES(progress)')->execute([$playerId, COUNTER_PREFIX . $name, $n]);
+}
 
 /** XP om van niveau $level naar $level+1 te gaan. */
 function xpForNext(int $level): int { return 100 + 50 * ($level - 1); }
@@ -98,14 +129,23 @@ function stats(PDO $pdo, int $playerId): array {
     $q = $pdo->prepare('SELECT COALESCE(MAX(level),1) FROM player_cards WHERE player_id=?');
     $q->execute([$playerId]);
     $s['max_card_level'] = (int)$q->fetchColumn();
+    $q = $pdo->prepare('SELECT COUNT(*) FROM player_cards WHERE player_id=? AND level >= 2');
+    $q->execute([$playerId]);
+    $s['cards_upgraded'] = (int)$q->fetchColumn();
+    $q = $pdo->prepare("SELECT COUNT(*) FROM friendships WHERE (player_low=? OR player_high=?) AND status='accepted'");
+    $q->execute([$playerId, $playerId]);
+    $s['friends'] = (int)$q->fetchColumn();
+    $q = $pdo->prepare('SELECT achievement_key, progress FROM player_achievements WHERE player_id=? AND achievement_key LIKE ?');
+    $q->execute([$playerId, COUNTER_PREFIX . '%']);
+    foreach ($q->fetchAll() as $r) $s[substr($r['achievement_key'], strlen(COUNTER_PREFIX))] = (int)$r['progress'];
     return $s;
 }
 
 /** Werkt prestaties bij; geeft de nieuw behaalde terug. */
 function updateAchievements(PDO $pdo, int $playerId): array {
     $s = stats($pdo, $playerId);
-    $q = $pdo->prepare('SELECT achievement_key FROM player_achievements WHERE player_id=? AND unlocked_at IS NOT NULL');
-    $q->execute([$playerId]);
+    $q = $pdo->prepare('SELECT achievement_key FROM player_achievements WHERE player_id=? AND unlocked_at IS NOT NULL AND achievement_key NOT LIKE ?');
+    $q->execute([$playerId, COUNTER_PREFIX . '%']);
     $have = array_flip($q->fetchAll(PDO::FETCH_COLUMN));
     $new = [];
     $up = $pdo->prepare('INSERT INTO player_achievements(player_id, achievement_key, progress, unlocked_at)

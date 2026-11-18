@@ -349,7 +349,7 @@ class Battle extends Phaser.Scene {
     this.accumulator = 0;
     this.selected = null;          // gekozen vak in de hand (0..3), of null
     this.hand = createHand(account.deckIndices(), this.state.rng);
-    this.stats = { unitsDeployed: 0, towersDestroyed: 0 };
+    this.stats = { unitsDeployed: 0, towersDestroyed: 0, towersLost: 0, castleDestroyed: false, kills: 0, killsByType: {}, deployedTypes: [] };
     this.matchStart = account.signedIn ? account.api('POST', 'match-start.php', {}).catch(() => null) : Promise.resolve(null);
     const again = () => this.scene.restart(), toMenu = () => this.scene.start('menu');
     window.addEventListener('lr:again', again); window.addEventListener('lr:to-menu', toMenu);
@@ -433,12 +433,14 @@ class Battle extends Phaser.Scene {
       return;
     }
     const slot = this.selected;
+    const played = CARDS[this.hand.slots[slot]].type;   // vóór playFromHand: daarna schuift er een nieuwe kaart in
     if (!deploy(this.state, 'blue', lane, this.hand.slots[slot], x)) {
       this.message.setText('Not enough energy');
       return;
     }
     playFromHand(this.hand, slot);
     this.stats.unitsDeployed++;
+    if (!this.stats.deployedTypes.includes(played)) this.stats.deployedTypes.push(played);
     this.selected = null;                               // na spelen niets meer geselecteerd
     this.cards[slot].enter = 0;                         // nieuwe kaart schuift het vak in
     this.refreshCardSlot(slot);
@@ -698,6 +700,11 @@ class Battle extends Phaser.Scene {
         else if (e.kind === 'musket') sfx(this, 'musket');
         else if (e.kind === 'healer') sfx(this, 'fireMagic');   // aanval van de priesteres
       } else if (e.type === 'death') {
+        // Vijand gedood door een blauwe eenheid (voor prestaties).
+        if (e.side === 'red' && e.killerSide === 'blue') {
+          this.stats.kills++;
+          this.stats.killsByType[e.killerType] = (this.stats.killsByType[e.killerType] ?? 0) + 1;
+        }
         const view = this.views.get(e.id);
         if (view && this.vanishing.has(e.id)) {   // spion na overname: geen sterfscène, gewoon weg
           this.views.delete(e.id);
@@ -714,6 +721,8 @@ class Battle extends Phaser.Scene {
         }
       } else if (e.type === 'destroyed') {
         if (e.kind === 'tower' && e.side === 'red') this.stats.towersDestroyed++;
+        if (e.kind === 'tower' && e.side === 'blue') this.stats.towersLost++;
+        if (e.kind === 'castle' && e.side === 'red') this.stats.castleDestroyed = true;
         if (e.kind === 'tower') {
           this.drawDeployZones();
           if (e.side === 'red') this.message.setText('Tower down — your deploy zone moves forward!');

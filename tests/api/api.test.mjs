@@ -77,7 +77,7 @@ test('profiel: standaardwaarden, vriendcode, alle prestaties en kaarten', { skip
   assert.equal(status, 200);
   assert.equal(data.player.level, 1);
   assert.match(data.friendCode, /^[A-Z2-9]{8}$/);
-  assert.equal(data.achievements.length, 17);
+  assert.equal(data.achievements.length, 38);
   assert.equal(Object.keys(data.cards).length, 18);
   assert.equal(data.deck.length, 8);
   assert.equal(data.email, 'anna@example.test');
@@ -116,6 +116,27 @@ test('gevecht: XP, munten, fragmenten, prestaties, één keer tellen, te kort te
   assert.equal((await a.post('match-finish.php', { matchId: m.matchId, result: 'win' })).status, 409, 'niet dubbel');
   const p = (await a.get('profile.php')).data;
   assert.equal(p.stats.wins, 1); assert.equal(p.stats.towers_destroyed, 2); assert.equal(p.player.coins, 60);
+});
+
+test('nieuwe prestaties: kasteel, foutloos, kills per eenheid, volledig deck, tellers begrensd', { skip }, async () => {
+  const a = client(); await a.login('livia@example.test');
+  const deck = ['melee', 'archer', 'cannon', 'cavalry', 'berserker', 'horse_archer', 'musket', 'spartan'];
+  let m = (await a.post('match-start.php')).data; matchAge(90);
+  const r = await a.post('match-finish.php', { matchId: m.matchId, result: 'win', towersDestroyed: 2, unitsDeployed: 20,
+    castleDestroyed: true, towersLost: 0, kills: 9999, killsByType: { lancer: 7, assassin: 3, bogus: 50 }, deployedTypes: [...deck, 'nope'] });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const keys = r.data.achievements.map(x => x.key);
+  for (const k of ['first_win', 'castle_1', 'flawless_1', 'full_deck']) assert.ok(keys.includes(k), k);
+  let p = (await a.get('profile.php')).data;
+  assert.equal(p.stats.kills, 200, 'kills per gevecht begrensd');
+  assert.equal(p.stats.kill_lancer, 7); assert.equal(p.stats.kill_assassin, 3); assert.equal(p.stats.win_spartan, 1);
+  assert.equal(p.achievements.length, 38, 'verborgen tellers verschijnen niet als prestatie');
+  // verlies: geen kasteel/foutloos, wel kills
+  m = (await a.post('match-start.php')).data; matchAge(90);
+  await a.post('match-finish.php', { matchId: m.matchId, result: 'loss', castleDestroyed: true, towersLost: 0, kills: 5 });
+  p = (await a.get('profile.php')).data;
+  assert.equal(p.stats.castles, 1); assert.equal(p.stats.flawless, 1); assert.equal(p.stats.kills, 205);
+  assert.equal(p.achievements.find(x => x.key === 'kills_500').progress, 205);
 });
 
 test('level-up en streaks', { skip }, async () => {

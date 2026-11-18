@@ -549,7 +549,7 @@ export function step(state, dt) {
   for (const u of state.units) {
     if (u.hp > 0) continue;
     const killer = state.units.find(k => k.id === u.lastHitBy);
-    state.events.push({ type: 'death', id: u.id, side: u.side, x: u.x, y: u.y, killerId: u.lastHitBy, killerType: killer?.card.type ?? null });
+    state.events.push({ type: 'death', id: u.id, side: u.side, x: u.x, y: u.y, killerId: u.lastHitBy, killerType: killer?.card.type ?? null, killerSide: killer?.side ?? null });
   }
   state.units = state.units.filter(u => u.hp > 0);
   for (const { target } of hits) {
