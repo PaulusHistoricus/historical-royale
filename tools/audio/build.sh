@@ -33,6 +33,15 @@ sfx horse-death 2.3 -17
 sfx knife 0.8 -17
 sfx teleport 1.2 -19
 sfx laugh 1.1 -16
+# Unit expansion 3. Meerdere explosies = afwisseling bij kanon en artillerie.
+sfx sniper 1.6 -15
+sfx tank-fire 1.0 -15
+sfx bazooka 1.5 -16
+sfx explosion-2 1.7 -16
+sfx explosion-3 2.2 -16
+sfx bandage 0.6 -20
+ffmpeg -v error -y -ss 3 -t 1.6 -i "$SRC/tent.mp3" -af "afade=t=in:d=0.1,afade=t=out:st=1.3:d=0.3,loudnorm=I=-20:TP=-2:LRA=11" -ac 1 -ar 44100 -b:a 80k "$OUT/tent.mp3"
+ffmpeg -v error -y -ss 40 -t 3 -i "$SRC/tank-move.mp3" -af "afade=t=in:d=0.15,afade=t=out:st=2.8:d=0.2,loudnorm=I=-22:TP=-2:LRA=11" -ac 1 -ar 44100 -b:a 80k "$OUT/tank-move.mp3"
 # lussen: vlammenwerper en paardengetrappel
 ffmpeg -v error -y -ss 2 -t 3 -i "$SRC/flamethrower.mp3" -af "afade=t=in:d=0.15,afade=t=out:st=2.8:d=0.2,loudnorm=I=-20:TP=-2:LRA=11" -ac 1 -ar 44100 -b:a 80k "$OUT/flamethrower.mp3"
 ffmpeg -v error -y -ss 0.5 -t 3 -i "$SRC/gallop.mp3" -af "afade=t=in:d=0.1,afade=t=out:st=2.85:d=0.15,loudnorm=I=-22:TP=-2:LRA=11" -ac 1 -ar 44100 -b:a 80k "$OUT/gallop.mp3"

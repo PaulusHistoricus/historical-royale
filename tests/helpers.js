@@ -47,14 +47,14 @@ export function run(state, seconds, onTick) {
         // Het doelwit mag ná de beslissing nog één stap zijn weggelopen.
         // Uitzondering: een doelwit dat deze tick door een Steppe Lancer is teruggeduwd.
         const pushed = events.some(e => e.type === 'knockback' && (e.id === u.targetId || e.id === u.id));
-        if (target && !pushed) assert.ok(gap(u, target) <= (u.card.type === 'healer' && target.side === u.side ? u.card.healRange : u.card.range) + 2, `eenheid ${u.id} valt aan buiten bereik`);
+        if (target && !pushed) assert.ok(gap(u, target) <= (target.side === u.side ? u.card.healRange : u.card.range) + 2, `eenheid ${u.id} valt aan buiten bereik`);
         const waited = (sinceHit.get(u.id) ?? 0) + TICK;
         sinceHit.set(u.id, waited);
         assert.ok(u.card.type === 'spy' || waited <= u.card.rate + 2 * TICK, `eenheid ${u.id} (${u.card.name}) staat ${waited.toFixed(2)}s in 'attack' zonder te slaan`);
       } else if (u.state === 'charmed') {
         assert.equal(u.x, before.get(u.id), `betoverde eenheid ${u.id} hoort stil te staan`);
         sinceHit.delete(u.id);
-      } else if (u.state === 'idle' && u.card.type === 'spy') {
+      } else if (u.state === 'idle' && ['spy', 'medic', 'hospital'].includes(u.card.type)) {
         // Spy awaits an eligible biological target.
       } else {
         assert.fail(`eenheid ${u.id} heeft onverwachte state '${u.state}'`);

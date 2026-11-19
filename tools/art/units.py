@@ -61,11 +61,11 @@ def hue_shift(rgb, m, src, dst, minsat=.38, width=22):
     flat[sel]=np.stack([R,G,B],1)
     return (out*255).clip(0,255).astype(np.uint8)
 
-def build(OUT, name, groups, target_h, ref_group, variants, alt=None):
+def build(OUT, name, groups, target_h, ref_group, variants, alt=None, ref_frame=0):
     """groups: dict anim -> list of (rgb, mask[, alpha]).
     alt: {suffix: groups} voor teamvarianten met eigen frames (zelfde animaties en aantallen);
     alle varianten delen dan één celmaat, zodat één manifest voor beide texturen geldt."""
-    ref_m=groups[ref_group][0][1]
+    ref_m=groups[ref_group][ref_frame][1]
     scale=target_h/ref_m.shape[0]
     def collect(gr):
         out=[]
@@ -203,5 +203,41 @@ def build_units(SRC, OUT, MANIFEST):
                 'flame':R['r1'][3:7],'hit':R['r2'][0:2],'death':R['r2'][2:8]}
     manifest['flamegi']=build(OUT,'flamegi',gi([(7,123),(123,231),(235,345)]),108,'idle',{'-blue':ident},
         alt={'-red':gi([(366,483),(483,592),(592,707)])})
+    # ---- Unit expansion 3 (moderne oorlog); witte bladen via white_sheet_frames ----
+    from sheetsplit import white_sheet_frames
+    red2blue = lambda rgb,m: hue_shift(rgb,m,358,218,minsat=.42,width=16)
+    F=white_sheet_frames(SRC+'tank.png')
+    G=pick(F,{'idle':[(0,0),(0,1),(0,2)],'walk':[(1,i) for i in range(6)],'attack':[(2,i) for i in range(4)],
+              'hit':[(3,0),(3,1)],'death':[(4,i) for i in range(6)]})
+    manifest['tank']=build(OUT,'tank',G,104,'idle',{'-red':ident,'-blue':red2blue})
+    F=white_sheet_frames(SRC+'sluipschutter.png')
+    G=pick(F,{'idle':[(0,0),(0,1),(0,2),(0,1)],'walk':[(1,i) for i in range(6)],'attack':[(2,1),(2,2),(2,3),(2,4),(2,5)],
+              'hit':[(3,1)],'death':[(4,0),(4,1),(4,2),(4,4)]})
+    manifest['sniper']=build(OUT,'sniper',G,116,'idle',{'':ident})
+    F=white_sheet_frames(SRC+'bazooka.png',splits={(2,0):3,(5,1):2})
+    gb=pick(F,{'idle':[(0,0),(0,1),(0,2),(0,3)],'walk':[(1,i) for i in range(6)],'attack':[(1,7),(2,0),(2,1),(2,2),(2,3),(2,4),(2,5)],
+              'hit':[(2,6),(2,7)],'death':[(2,i) for i in range(10,15)]})
+    gr=pick(F,{'idle':[(3,0),(3,1),(3,2),(3,3)],'walk':[(4,i) for i in range(6)],'attack':[(4,7),(5,0),(5,1),(5,2),(5,3),(5,4),(5,5)],
+              'hit':[(5,6),(5,7)],'death':[(5,i) for i in range(10,15)]})
+    manifest['bazooka']=build(OUT,'bazooka',gb,112,'idle',{'-blue':ident},alt={'-red':gr})
+    F=white_sheet_frames(SRC+'hospik.png')
+    spec=lambda a:{'idle':[(a,0),(a,1),(a,2),(a,3)],'walk':[(a+1,i) for i in range(6)],'attack':[(a+1,6),(a+1,7)],
+              'hit':[(a+2,0),(a+2,1)],'death':[(a+2,i) for i in range(2,9)]}
+    manifest['medic']=build(OUT,'medic',pick(F,spec(0)),112,'idle',{'-blue':ident},alt={'-red':pick(F,spec(3))})
+    # Veldhospitaal: vlaggen wisselen per rij van kleur -> alleen het bovenste kwart (de vlag) omkleuren.
+    def flag(src,dst):
+        def fn(rgb,m):
+            mm=m.copy(); mm[int(m.shape[0]*0.3):]=False
+            return hue_shift(rgb,mm,src,dst,minsat=.35,width=30)
+        return fn
+    F=sheet_frames(SRC+'veldhospitaal.png')
+    G=pick(F,{'idle':[(1,0),(1,1),(1,2),(1,3)],'walk':[(1,0)],'attack':[(1,0)],'hit':[(1,0)],
+              'appear':[(0,i) for i in range(5)],'death':[(2,i) for i in range(4)]})
+    manifest['hospital']=build(OUT,'hospital',G,140,'idle',{'-blue':flag(358,222),'-red':flag(222,358)})
+    # Artilleriebeschieting (effect). artillerie-effect-2.png (witte achtergrond) valt af: de witte kern
+    # van de explosie is niet van de achtergrond te scheiden.
+    F1=sheet_frames(SRC+'artillerie-effect.png')
+    spec={'shell':[(0,i) for i in range(4)],'boom':[(1,i) for i in range(8)],'crater':[(2,0)]}
+    manifest['barrage']=build(OUT,'barrage',pick(F1,spec),150,'boom',{'':ident},ref_frame=3)
     json.dump(manifest,open(MANIFEST,'w'),indent=1)
     return manifest

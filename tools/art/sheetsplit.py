@@ -54,3 +54,19 @@ def contact(F, path):
             im.paste(fr, (fi * cw + 3, ri * ch + 16), fr)
             d.text((fi * cw + 4, ri * ch + 2), f'{ri},{fi}', fill=(255, 255, 0))
     im.save(path)
+
+
+def white_sheet_frames(path, splits={}, minh=40):
+    """Zoals sheet_frames, maar voor bladen met een witte achtergrond (geen alfa)."""
+    from extract import load, fg_mask
+    a = load(path); fg = fg_mask(a)
+    rows = [r for r in bands(fg.sum(1), 2, 2) if r[1] - r[0] > minh]
+    out = []
+    for ri, (y0, y1) in enumerate(rows):
+        frames = []
+        for fi, b in enumerate(frames_in_row(fg, y0, y1, 0)):
+            parts = split_components(fg, b, autosplit_x(fg, b, splits[(ri, fi)])) if (ri, fi) in splits else [(b, fg[b[1]:b[3], b[0]:b[2]])]
+            for (x0, yy0, x1, yy1), m in parts:
+                frames.append((a[yy0:yy1, x0:x1].astype(np.uint8), m))
+        out.append(frames)
+    return out
