@@ -20,6 +20,13 @@ EXTRA = [
     ('kaart-vlammenwerper-gi.png', 'flamegi', None),
     ('kaart-stepperuiter.png', 'lancer', None),
     ('kaart-sluipmoordenares.png', 'assassin', None),
+    # Unit expansion 3
+    ('kaart-sluipschutter.png', 'sniper', None),
+    ('kaart-tank.png', 'tank', None),
+    ('kaart-bazooka.png', 'bazooka', None),
+    ('kaart-hospik.png', 'medic', None),
+    ('kaart-artillerie.png', 'barrage', None),
+    ('kaart-veldhospitaal.png', 'hospital', None),
 ]
 
 def build_cards(SRC, OUT, MANIFEST):

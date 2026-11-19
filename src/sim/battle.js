@@ -19,7 +19,7 @@ import { cardLevelMultiplier } from '../progression.js';
 import {
   CARDS, STRUCTURES, STRUCTURE_POSITIONS, LANES, DEPLOY_ZONE, DETECTION_RANGE,
   MATCH_SECONDS, OVERTIME_AT, ENERGY_START, ENERGY_MAX, ENERGY_SECONDS,
-  ENERGY_SECONDS_OVERTIME, AI, DEPLOY_ADVANCE, SUPPORT_TYPES,
+  ENERGY_SECONDS_OVERTIME, AI, DEPLOY_ADVANCE, SUPPORT_TYPES, ARMOR,
 } from './config.js';
 
 const EPS = 1e-6;
@@ -51,6 +51,7 @@ export function createBattle({ seed = Date.now(), ai = true, cardLevels = null }
     energy: { blue: ENERGY_START, red: ENERGY_START },
     units: [],
     airstrikes: [],
+    barrages: [],
     structures: [],
     events: [],
     nextId: 1,
@@ -82,6 +83,8 @@ export function leveledCard(state, side, card) {
   const k = cardLevelMultiplier(level);
   const scaled = { ...card, level, hp: Math.round(card.hp * k), damage: Math.round(card.damage * k) };
   if (card.burnDps) scaled.burnDps = Math.round(card.burnDps * k);
+  if (card.unitDamage) { scaled.unitDamage = Math.round(card.unitDamage * k); scaled.structureDamage = Math.round(card.structureDamage * k); }
+  if (card.healPerTick) scaled.healPerTick = card.healPerTick * k;
   if (card.poisonDps) scaled.poisonDps = Math.round(card.poisonDps * k);
   return scaled;
 }
@@ -116,6 +119,15 @@ export function deploy(state, side, lane, cardIndex, x) {
     state.airstrikes.push(strike);
     // deploy() kan ook buiten een step worden aangeroepen; dit event is visueel optioneel.
     return strike;
+  }
+  if (card.type === 'barrage') {
+    // Artilleriebeschieting op een gekozen plek (overal in de baan): na `delay` vallen de granaten.
+    const cx = clamp(x, 60, 900);
+    const shells = Array.from({ length: card.shells }, (_, i) => ({
+      t: card.delay + i * card.spacing, x: clamp(cx + (state.rng() - 0.5) * 2 * card.spread, 30, 930), done: false }));
+    const barrage = { id: state.nextId++, side, lane, x: cx, time: 0, shells, card: leveledCard(state, side, card) };
+    state.barrages.push(barrage);
+    return barrage;
   }
   const zone = deployZone(state, side, lane);
   return addUnit(state, side, lane, cardIndex, clamp(x, zone.min, zone.max));
@@ -241,8 +253,15 @@ function stepAI(state, dt) {
     // Achterste ~77 % van de eigen zone (met de standaardzone precies AI.spawnMin..spawnMax).
     const zone = deployZone(state, 'red', lane);
     const lo = zone.min + (AI.spawnMin - DEPLOY_ZONE.red.min) / (DEPLOY_ZONE.red.max - DEPLOY_ZONE.red.min) * (zone.max - zone.min);
-    const x = lo + state.rng() * (zone.max - lo);
-    deploy(state, 'red', lane, index, x);
+    let x = lo + state.rng() * (zone.max - lo);
+    let useLane = lane;
+    if (CARDS[index].type === 'barrage') {
+      // Granaten op de verste blauwe eenheid (de grootste dreiging), anders op de blauwe toren.
+      const foes = state.units.filter(u => u.side === 'blue' && u.hp > 0 && !u.hidden).sort((a, b) => b.x - a.x || a.id - b.id);
+      if (foes.length) { useLane = foes[0].lane; x = foes[0].x; }
+      else { const t = laneTower(state, 'blue', lane); x = t ? t.x : STRUCTURE_POSITIONS.blue.castleX; }
+    }
+    deploy(state, 'red', useLane, index, x);
   }
   state.ai.clock = AI.minDelay + state.rng() * (AI.maxDelay - AI.minDelay);
 }
@@ -349,6 +368,33 @@ export function step(state, dt) {
   }
   state.airstrikes = state.airstrikes.filter(a => a.time < a.duration);
 
+  // Artilleriebeschieting: elke granaat raakt vijandelijke eenheden en gebouwen in een kleine cirkel.
+  for (const b of state.barrages) {
+    b.time += dt;
+    for (const sh of b.shells) {
+      if (sh.done || b.time < sh.t) continue;
+      sh.done = true;
+      state.events.push({ type: 'shell', id: b.id, side: b.side, lane: b.lane, x: sh.x });
+      for (const u of state.units) {
+        if (u.hp <= 0 || u.side === b.side || u.lane !== b.lane || Math.abs(u.x - sh.x) > b.card.blastRadius + u.radius) continue;
+        const before = u.hp;
+        u.hp = Math.max(0, u.hp - b.card.unitDamage);
+        state.events.push({ type: 'hit', kind: 'barrage', side: b.side, attackerId: b.id, targetId: u.id,
+          from: { x: sh.x, y: LANES[b.lane] - 60 }, to: { x: u.x, y: u.y }, damage: before - u.hp });
+      }
+      for (const s of state.structures) {
+        if (s.hp <= 0 || s.side === b.side || (s.kind === 'tower' && s.lane !== b.lane) ||
+            Math.abs(s.x - sh.x) > b.card.blastRadius + s.radius) continue;
+        const before = s.hp;
+        s.hp = Math.max(0, s.hp - b.card.structureDamage);
+        state.events.push({ type: 'hit', kind: 'barrage', side: b.side, attackerId: b.id, targetId: s.id,
+          from: { x: sh.x, y: LANES[b.lane] - 60 }, to: { x: s.x, y: s.y }, damage: before - s.hp });
+        if (s.hp <= 0 && !s.destroyed) { s.destroyed = true; state.events.push({ type: 'destroyed', id: s.id, kind: s.kind, side: s.side }); }
+      }
+    }
+  }
+  state.barrages = state.barrages.filter(b => b.shells.some(sh => !sh.done));
+
   // 1. BESLISSEN
   for (const u of state.units) {
     if (u.hp <= 0) continue;
@@ -368,6 +414,57 @@ export function step(state, dt) {
         u.cloakTimer = u.card.recloakTime;
         state.events.push({ type: 'cloak', id: u.id, side: u.side });
       }
+    }
+    // Veldhospitaal: staat stil, geneest elke seconde alle biologische bondgenoten in de buurt, verdwijnt na `lifetime`.
+    if (u.card.type === 'hospital') {
+      u.state = 'idle'; u.targetId = null;
+      u.age = (u.age ?? 0) + dt;
+      if (u.age >= u.card.lifetime) { u.hp = 0; u.expired = true; continue; }
+      if (u.cd <= 0) {
+        u.cd = u.card.rate;
+        for (const a of state.units) {
+          if (a.side !== u.side || a.hp <= 0 || a.hp >= a.max || a.card.material !== 'bio' || a.lane !== u.lane ||
+              a.noHealRemaining > 0 || Math.abs(a.x - u.x) > u.card.healRange) continue;
+          const amount = Math.min(a.max - a.hp, a.max * u.card.healPct);
+          a.hp += amount;
+          state.events.push({ type: 'heal', attackerId: u.id, targetId: a.id, amount, from: { x: u.x, y: u.y }, to: { x: a.x, y: a.y } });
+        }
+      }
+      continue;
+    }
+    // Combat Medic: rent naar de zwaarst gewonde biologische bondgenoot in zijn baan en behandelt die
+    // doorlopend (geen aanval). Niemand gewond: volgt de voorste bondgenoot op `followGap` erachter.
+    if (u.card.type === 'medic') {
+      const forward = u.side === 'blue' ? 1 : -1;
+      const hurt = state.units.filter(a => a !== u && a.side === u.side && a.hp > 0 && a.hp < a.max && a.card.material === 'bio' &&
+        !(a.noHealRemaining > 0) && a.state !== 'charmed' && canFight(state, u, a) && Math.abs(a.x - u.x) <= DETECTION_RANGE);
+      hurt.sort((a, b) => a.hp / a.max - b.hp / b.max || a.id - b.id);
+      const patient = hurt[0];
+      if (patient) {
+        u.targetId = patient.id;
+        if (patient.x !== u.x) u.facing = patient.x > u.x ? 1 : -1;
+        if (gap(u, patient) <= u.card.healRange + EPS) {
+          u.state = 'attack';
+          if (u.cd <= 0) {
+            const amount = Math.min(patient.max - patient.hp, u.card.healPerTick);
+            patient.hp += amount; u.cd = u.card.rate;
+            state.events.push({ type: 'heal', attackerId: u.id, targetId: patient.id, amount, from: { x: u.x, y: u.y }, to: { x: patient.x, y: patient.y } });
+          }
+        } else {
+          u.state = 'move';
+          moves.push({ unit: u, dx: u.facing * Math.min(u.card.speed * dt, gap(u, patient) - u.card.healRange) });
+        }
+        continue;
+      }
+      const allies = state.units.filter(a => a !== u && a.side === u.side && a.hp > 0 && a.lane === u.lane && !a.card.static);
+      const lead = allies.sort((a, b) => (b.x - a.x) * forward || a.id - b.id)[0];
+      const spot = lead ? lead.x - forward * u.card.followGap : null;
+      u.targetId = null;
+      if (spot !== null && Math.abs(spot - u.x) > 1) {
+        u.state = 'move'; u.facing = spot > u.x ? 1 : -1;
+        moves.push({ unit: u, dx: u.facing * Math.min(u.card.speed * dt, Math.abs(spot - u.x)) });
+      } else u.state = 'idle';
+      continue;
     }
     // Genezeres geneest alleen biologische bondgenoten, nooit zichzelf.
     if (u.card.type === 'healer' && u.cd <= 0) {
@@ -488,7 +585,9 @@ export function step(state, dt) {
       attacker.firstStrikeDone = true;
     }
     // Pantser beschermt mechanische eenheden tegen gewone aanvallen, niet tegen kanonnen.
-    if (target.card?.material === 'mechanical') {
+    if (target.card?.armored) {
+      damage = damage * (attacker.card?.antiArmor ?? (!attacker.card ? ARMOR.structure : attacker.card.role === 'siege' ? 1 : ARMOR.normal));
+    } else if (target.card?.material === 'mechanical') {
       damage = Math.round(damage * (attacker.card?.role === 'siege' ? 1.25 : 0.85));
     }
     const before = target.hp;

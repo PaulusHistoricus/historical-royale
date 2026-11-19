@@ -65,6 +65,19 @@ export const CARDS = [
     hp: 205, damage: 41, range: 22, speed: 105, rate: 1.1, radius: 19, chargeBonus: 20, chargeDistance: 65, knockback: 30 },
   { name: 'Persian Assassin', type: 'assassin', role: 'melee', material: 'bio', cost: 3,
     hp: 105, damage: 38, range: 12, speed: 90, rate: 0.9, radius: 11, backstabBonus: 0.75, supportDetect: 160 },
+  // Unit expansion 3 (moderne oorlog). Zie AGENTS.md.
+  { name: 'Modern Sniper', type: 'sniper', role: 'ranged', material: 'bio', cost: 5,
+    hp: 120, damage: 180, range: 125, speed: 36, rate: 4.0, radius: 12 },
+  { name: 'Mark IV Tank', type: 'tank', role: 'siege', material: 'mechanical', armored: true, cost: 7,
+    hp: 900, damage: 30, range: 70, speed: 20, rate: 2.0, radius: 30 },
+  { name: 'Bazooka Trooper', type: 'bazooka', role: 'ranged', material: 'bio', cost: 4,
+    hp: 150, damage: 45, range: 100, speed: 40, rate: 3.0, radius: 12, antiArmor: 4 },
+  { name: 'Combat Medic', type: 'medic', role: 'special', material: 'bio', cost: 3, support: true,
+    hp: 130, damage: 0, range: 20, speed: 62, rate: 0.5, radius: 12, healPerTick: 5, healRange: 20, followGap: 30 },
+  { name: 'Artillery Barrage', type: 'barrage', role: 'special', material: 'mechanical', cost: 6,
+    shells: 5, delay: 1.5, spacing: 0.22, spread: 45, blastRadius: 35, unitDamage: 55, structureDamage: 60 },
+  { name: 'Field Hospital', type: 'hospital', role: 'special', material: 'mechanical', static: true, cost: 4,
+    hp: 320, damage: 0, range: 0, speed: 0, rate: 1.0, radius: 24, lifetime: 12, healPct: 0.04, healRange: 85 },
 
 ];
 
@@ -88,4 +101,7 @@ export const AI = {
 };
 
 // Ondersteuners: de Perzische sluipmoordenares zoekt deze eerst op.
-export const SUPPORT_TYPES = ['healer', 'banner', 'plague'];
+export const SUPPORT_TYPES = ['healer', 'banner', 'plague', 'medic'];
+// Gepantserd (Mark IV): gewone aanvallen doen ARMOR.normal, gebouwen ARMOR.structure, artillerie (siege) vol,
+// antiArmor-wapens (bazooka) vermenigvuldigen. P-51 werkt met % van max hp en is dus altijd effectief.
+export const ARMOR = { normal: 0.3, structure: 0.5 };

@@ -1,5 +1,5 @@
 {
- "frameWidth": 198,
+ "frameWidth": 199,
  "frameHeight": 196,
  "cards": {
   "melee": {
@@ -11,7 +11,7 @@
   },
   "archer": {
    "frame": 1,
-   "gemX": 40.5,
+   "gemX": 41.5,
    "gemY": 25.8,
    "gemR": 22.9,
    "width": 161
@@ -25,14 +25,14 @@
   },
   "cavalry": {
    "frame": 3,
-   "gemX": 40.8,
+   "gemX": 41.8,
    "gemY": 26.2,
    "gemR": 22.8,
    "width": 161
   },
   "berserker": {
    "frame": 4,
-   "gemX": 30.5,
+   "gemX": 31.5,
    "gemY": 27.0,
    "gemR": 23.1,
    "width": 183
@@ -60,7 +60,7 @@
   },
   "samurai": {
    "frame": 8,
-   "gemX": 42.4,
+   "gemX": 43.4,
    "gemY": 27.4,
    "gemR": 20.6,
    "width": 165
@@ -123,6 +123,48 @@
   },
   "assassin": {
    "frame": 17,
+   "gemX": 32.4,
+   "gemY": 27.4,
+   "gemR": 20.6,
+   "width": 196
+  },
+  "sniper": {
+   "frame": 18,
+   "gemX": 32.5,
+   "gemY": 27.4,
+   "gemR": 20.6,
+   "width": 197
+  },
+  "tank": {
+   "frame": 19,
+   "gemX": 32.5,
+   "gemY": 27.4,
+   "gemR": 20.6,
+   "width": 197
+  },
+  "bazooka": {
+   "frame": 20,
+   "gemX": 32.5,
+   "gemY": 27.4,
+   "gemR": 20.6,
+   "width": 197
+  },
+  "medic": {
+   "frame": 21,
+   "gemX": 32.5,
+   "gemY": 27.4,
+   "gemR": 20.6,
+   "width": 197
+  },
+  "barrage": {
+   "frame": 22,
+   "gemX": 32.5,
+   "gemY": 27.4,
+   "gemR": 20.6,
+   "width": 197
+  },
+  "hospital": {
+   "frame": 23,
    "gemX": 32.4,
    "gemY": 27.4,
    "gemR": 20.6,

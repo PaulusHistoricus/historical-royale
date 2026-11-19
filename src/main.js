@@ -38,7 +38,8 @@ const AUDIO = import.meta.env.BASE_URL + 'assets/audio/';
 const SFX_FILES = ['sword-1', 'sword-2', 'sword-3', 'axe', 'death-male-1', 'death-male-2', 'death-collapse',
   'death-female-1', 'death-female-2', 'death-female-3', 'musket', 'machine-gun', 'explosion', 'heal', 'magic-wind',
   'small-explosion', 'fire', 'kiss', 'tower-collapse', 'fire-magic', 'arrow',
-  'spear-1', 'spear-2', 'potion-1', 'potion-2', 'choir', 'flamethrower', 'horse-death', 'gallop', 'knife', 'teleport', 'laugh'];
+  'spear-1', 'spear-2', 'potion-1', 'potion-2', 'choir', 'flamethrower', 'horse-death', 'gallop', 'knife', 'teleport', 'laugh',
+  'sniper', 'tank-fire', 'tank-move', 'bazooka', 'explosion-2', 'explosion-3', 'bandage', 'tent'];
 const MUSIC = { menu: 'music-2', battle: ['music-1', 'music-3'] };
 const SFX = {   // groep -> [bestanden, volume, minimale tijd tussen twee keer (ms)]
   sword: [['sword-1', 'sword-2', 'sword-3'], 0.45, 70],
@@ -47,7 +48,7 @@ const SFX = {   // groep -> [bestanden, volume, minimale tijd tussen twee keer (
   deathFemale: [['death-female-1', 'death-female-2', 'death-female-3'], 0.5, 150],
   musket: [['musket'], 0.5, 60],
   mg: [['machine-gun'], 0.55, 300],
-  boom: [['explosion'], 0.45, 90],
+  boom: [['explosion', 'explosion-2', 'explosion-3'], 0.45, 90],   // afwisselende explosies
   heal: [['heal'], 0.35, 450],
   magic: [['magic-wind'], 0.4, 400],
   pot: [['small-explosion'], 0.5, 90],
@@ -62,8 +63,14 @@ const SFX = {   // groep -> [bestanden, volume, minimale tijd tussen twee keer (
   knife: [['knife'], 0.45, 80],
   teleport: [['teleport'], 0.4, 300],
   laugh: [['laugh'], 0.55, 600],
+  sniper: [['sniper'], 0.6, 120],
+  tankFire: [['tank-fire'], 0.55, 150],
+  bazooka: [['bazooka'], 0.5, 120],
+  bandage: [['bandage'], 0.3, 900],
+  tent: [['tent'], 0.45, 400],
 };
-const FEMALE = new Set(['healer', 'spy', 'banner', 'assassin']);
+const FEMALE = new Set(['healer', 'spy', 'banner', 'assassin', 'sniper']);
+const NO_DEATH_CRY = new Set(['tank', 'hospital', 'cannon']);   // geen sterfkreet, wel een klap
 let autoFullscreenDone = false;
 
 // Levend vuur bovenop de geschilderde schadestadia: [x, y, grootte, soort] in framepixels
@@ -118,13 +125,15 @@ const setSoundOn = (game, on) => { try { localStorage.setItem('lr-sound', on ? '
 const footY = u => LANES[u.lane] + 8 + (u.y - LANES[u.lane]) * 0.6;
 const STRUCTURE_FOOT = { tower: lane => LANES[lane] + 20, castle: () => 246 };
 const UNIT_HEIGHT = { melee: 56, archer: 58, cannon: 54, cavalry: 70, berserker: 56, horse_archer: 72, musket: 58, healer: 58, samurai: 60, spy: 54, firethrower: 57,
-  spartan: 60, plague: 60, banner: 62, flamegi: 56, lancer: 72, assassin: 56 };   // voor de levensbalk
+  spartan: 60, plague: 60, banner: 62, flamegi: 56, lancer: 72, assassin: 56,
+  sniper: 60, tank: 60, bazooka: 58, medic: 58, hospital: 70 };   // voor de levensbalk
 const MOUNTED = new Set(['cavalry', 'horse_archer', 'lancer']);
 const MELEE_KINDS = new Set(['melee', 'cavalry', 'berserker', 'samurai', 'spy', 'banner', 'lancer']);
 const CARD_LABEL = { melee: 'Legionary', archer: 'Archer', cannon: 'Cannon', cavalry: 'Cavalry',
   berserker: 'Berserker', horse_archer: 'Horse Archer', musket: 'Musketeer',
   healer: 'Priestess', samurai: 'Samurai', spy: 'Spy', firethrower: 'Fire Thrower', p51: 'P-51 Mustang',
-  spartan: 'Spartan', plague: 'Plague Doctor', banner: 'Banner Maiden', flamegi: 'Flamethrower', lancer: 'Steppe Lancer', assassin: 'Assassin' };
+  spartan: 'Spartan', plague: 'Plague Doctor', banner: 'Banner Maiden', flamegi: 'Flamethrower', lancer: 'Steppe Lancer', assassin: 'Assassin',
+  sniper: 'Sniper', tank: 'Mark IV Tank', bazooka: 'Bazooka', medic: 'Combat Medic', barrage: 'Artillery', hospital: 'Field Hospital' };
 
 const unitTexture = (type, side) => {
   const list = UNIT_ART[type].textures;
@@ -427,7 +436,8 @@ class Battle extends Phaser.Scene {
     if (y >= FIELD_BOTTOM || y < 40) return;
     const lane = Math.abs(y - LANES[0]) <= Math.abs(y - LANES[1]) ? 0 : 1;
     const zone = deployZone(this.state, 'blue', lane);
-    if (Math.abs(y - LANES[lane]) > 48 || x < zone.min || x > zone.max) return;
+    const anywhere = this.selected !== null && CARDS[this.hand.slots[this.selected]].type === 'barrage';   // artillerie: overal in de baan
+    if (Math.abs(y - LANES[lane]) > 48 || (!anywhere && (x < zone.min || x > zone.max))) return;
     if (this.selected === null) {
       this.message.setText('Select a card first');
       return;
@@ -629,20 +639,31 @@ class Battle extends Phaser.Scene {
     const now = this.time.now;
     {
       if (e.type === 'heal') {
-        sfx(this, 'heal');
+        if (this.views.get(e.attackerId)?.type === 'healer') sfx(this, 'heal');
         const healer = this.views.get(e.attackerId);
-        if (healer) {
-          healer.sprite.anims.play(`${healer.sprite.texture.key}:heal`);
+        const healAnim = healer && (UNIT_ART[healer.type].anims.heal ? 'heal' : healer.type === 'medic' ? 'attack' : null);
+        if (healAnim) {
+          healer.sprite.anims.play(`${healer.sprite.texture.key}:${healAnim}`);
           healer.lockUntil = now + healer.sprite.anims.currentAnim.duration;
         }
+        if (healer?.type === 'medic') sfx(this, 'bandage');
         const ally = this.state.units.find(u => u.id === e.targetId);
         const healerUnit = this.state.units.find(u => u.id === e.attackerId);
         const ay = (ally ? footY(ally) : e.to.y) - 30;
         this.sparks.push({ x: e.to.x, y: ay, t: 0, dur: 0.55, color: 0xffe27a, heal: true });
-        if (healerUnit) this.sparks.push({ x: healerUnit.x + healerUnit.facing * 20, y: footY(healerUnit) - 44, tx: e.to.x, ty: ay, t: 0, dur: 0.35, color: 0x9dffb0, beam: true });
+        if (healerUnit && healerUnit.card.type === 'healer') this.sparks.push({ x: healerUnit.x + healerUnit.facing * 20, y: footY(healerUnit) - 44, tx: e.to.x, ty: ay, t: 0, dur: 0.35, color: 0x9dffb0, beam: true });
         const plus = this.add.text(e.to.x, ay - 14, '+' + Math.round(e.amount), textStyle(11, '#8dffa3', { strokeThickness: 3 }))
           .setOrigin(0.5).setDepth(1020).setResolution(clamp(Math.ceil(this.view.zoom), 1, 4));
         this.tweens.add({ targets: plus, y: plus.y - 18, alpha: 0, duration: 900, onComplete: () => plus.destroy() });
+      } else if (e.type === 'shell') {   // artilleriegranaat slaat in
+        const y = LANES[e.lane] + 14;
+        this.add.sprite(e.x, y, 'barrage').setOrigin(0.5, UNIT_ART.barrage.originY).setScale(0.7).setDepth(y + 30)
+          .play('barrage:boom').once('animationcomplete', (_a, _f, spr) => spr.destroy());
+        const crater = this.add.sprite(e.x, y + 2, 'barrage', UNIT_ART.barrage.anims.crater[0]).setOrigin(0.5, UNIT_ART.barrage.originY)
+          .setScale(0.35).setDepth(0.5).setAlpha(0.9);
+        this.tweens.add({ targets: crater, alpha: 0, delay: 3500, duration: 1500, onComplete: () => crater.destroy() });
+        sfx(this, 'boom');
+        this.cameras.main.shake(140, 0.003);
       } else if (e.type === 'infect') {
         const t = this.state.units.find(u => u.id === e.targetId);
         if (t) for (let i = 0; i < 6; i++) this.sparks.push({ x: t.x + (Math.random() - 0.5) * 16, y: footY(t) - 20 - Math.random() * 20, t: 0, dur: 0.6, color: 0x8dff5a, heal: true });
@@ -679,7 +700,7 @@ class Battle extends Phaser.Scene {
         const target = this.views.get(e.targetId);
         if (target) {
           target.flashUntil = now + 110;
-          const ranged = ['archer', 'horse_archer', 'musket', 'plague', 'firethrower', 'tower', 'castle'].includes(e.kind);
+          const ranged = ['archer', 'horse_archer', 'musket', 'plague', 'firethrower', 'sniper', 'bazooka', 'tower', 'castle'].includes(e.kind);
           if (target.type === 'spartan' && ranged && now >= target.lockUntil) {   // schild omhoog tegen projectielen
             target.sprite.anims.play(`${target.sprite.texture.key}:shield_wall`);
             target.lockUntil = now + target.sprite.anims.currentAnim.duration;
@@ -696,6 +717,9 @@ class Battle extends Phaser.Scene {
         else if (e.kind === 'spartan') sfx(this, 'spear');
         else if (e.kind === 'assassin') { sfx(this, 'knife'); if (e.backstab) sfx(this, 'teleport'); }
         else if (e.kind === 'plague') sfx(this, 'potion');
+        else if (e.kind === 'sniper') sfx(this, 'sniper');
+        else if (e.kind === 'tank') sfx(this, 'tankFire');
+        else if (e.kind === 'bazooka') sfx(this, 'bazooka');
         else if (MELEE_KINDS.has(e.kind)) sfx(this, 'sword');
         else if (e.kind === 'musket') sfx(this, 'musket');
         else if (e.kind === 'healer') sfx(this, 'fireMagic');   // aanval van de priesteres
@@ -710,7 +734,8 @@ class Battle extends Phaser.Scene {
           this.views.delete(e.id);
           this.tweens.add({ targets: view.sprite, alpha: 0, scale: view.sprite.scale * 0.9, duration: 350, onComplete: () => view.sprite.destroy() });
         } else if (view) {
-          sfx(this, MOUNTED.has(view.type) ? 'horseDeath' : FEMALE.has(view.type) ? 'deathFemale' : 'deathMale');
+          if (NO_DEATH_CRY.has(view.type)) { if (view.type === 'tank') { sfx(this, 'boom'); this.cameras.main.shake(250, 0.004); } }
+          else sfx(this, MOUNTED.has(view.type) ? 'horseDeath' : FEMALE.has(view.type) ? 'deathFemale' : 'deathMale');
           if (e.killerType === 'assassin') this.time.delayedCall(250, () => sfx(this, 'laugh'));
           this.views.delete(e.id);
           view.burn?.destroy();
@@ -757,6 +782,7 @@ class Battle extends Phaser.Scene {
       this.sparks.push({ x: e.to.x - dir * 6, y: targetY, t: 0, dur: 0.22, color: 0xfff1b8 });
       return;
     }
+    if (e.kind === 'barrage') return;   // inslag zelf wordt bij het 'shell'-event getekend
     if (e.kind === 'p51') {   // kogelregen uit het vliegtuig
       const lane = this.state.units.find(u => u.id === e.targetId)?.lane ?? 0;
       for (let i = 0; i < 3; i++) this.projectiles.push({ kind: 'bullet', x0: e.to.x - dir * (30 + i * 8), y0: LANES[lane] - 62,
@@ -772,16 +798,16 @@ class Battle extends Phaser.Scene {
     let x0, y0;
     const attacker = this.state.units.find(u => u.id === e.attackerId);
     if (attacker) {
-      x0 = attacker.x + dir * ({ musket: 30, healer: 34 }[e.kind] ?? 22);
-      y0 = footY(attacker) - ({ cannon: 26, horse_archer: 50, musket: 38, healer: 40, firethrower: 44 }[e.kind] ?? 34);
-      if (e.kind === 'musket') this.sparks.push({ x: x0, y: y0, t: 0, dur: 0.12, color: 0xffc04a });
+      x0 = attacker.x + dir * ({ musket: 30, healer: 34, sniper: 36, tank: 48, bazooka: 30 }[e.kind] ?? 22);
+      y0 = footY(attacker) - ({ cannon: 26, horse_archer: 50, musket: 38, healer: 40, firethrower: 44, sniper: 40, tank: 30, bazooka: 30 }[e.kind] ?? 34);
+      if (['musket', 'sniper', 'tank'].includes(e.kind)) this.sparks.push({ x: x0, y: y0, t: 0, dur: e.kind === 'musket' ? 0.12 : 0.2, color: 0xffc04a, big: e.kind === 'tank' });
     }
     else { x0 = e.from.x; y0 = this.structureTop(e.attackerId) + 10; }
     const dist = Math.abs(e.to.x - x0);
-    const kind = { cannon: 'ball', musket: 'bullet', healer: 'bolt', firethrower: 'pot', plague: 'vial' }[e.kind] ?? 'arrow';
+    const kind = { cannon: 'ball', tank: 'ball', musket: 'bullet', sniper: 'bullet', healer: 'bolt', firethrower: 'pot', plague: 'vial', bazooka: 'rocket' }[e.kind] ?? 'arrow';
     this.projectiles.push({ kind, archer: e.kind === 'archer' || e.kind === 'horse_archer', x0, y0, x1: e.to.x, y1: targetY,
-      t: 0, dur: Math.max(e.kind === 'musket' ? 0.06 : 0.12, dist / ({ cannon: 520, musket: 1600, healer: 900, firethrower: 420 }[e.kind] ?? 760)),
-      arc: { cannon: 26, musket: 0, healer: 0, firethrower: 34 }[e.kind] ?? 10 });
+      t: 0, dur: Math.max(e.kind === 'musket' || e.kind === 'sniper' ? 0.06 : 0.12, dist / ({ cannon: 520, tank: 700, musket: 1600, sniper: 2200, healer: 900, firethrower: 420, bazooka: 520 }[e.kind] ?? 760)),
+      arc: { cannon: 26, tank: 6, musket: 0, sniper: 0, healer: 0, firethrower: 34, bazooka: 4 }[e.kind] ?? 10 });
   }
 
   structureTop(id) {
@@ -855,6 +881,11 @@ class Battle extends Phaser.Scene {
         .setOrigin(def.originX, def.originY).setScale(1 / TEX);
       const view = { sprite, type: u.card.type, side: u.side, lockUntil: 0, flashUntil: 0, burn: null, revealed: false };
       this.views.set(u.id, view);
+      if (u.card.type === 'hospital') {   // tent vouwt zich uit
+        sprite.anims.play(`${sprite.texture.key}:appear`);
+        view.lockUntil = this.time.now + sprite.anims.currentAnim.duration;
+        sfx(this, 'tent');
+      }
       if (u.card.type === 'banner') {   // vaandel heffen bij binnenkomst (Rally)
         sprite.anims.play(`${sprite.texture.key}:rally`);
         view.lockUntil = this.time.now + sprite.anims.currentAnim.duration;
@@ -885,6 +916,8 @@ class Battle extends Phaser.Scene {
     this.loopSound('flamethrower', flaming > 0, Math.min(0.5, 0.3 + flaming * 0.08));
     const riding = this.state.units.filter(u => MOUNTED.has(u.card.type) && u.state === 'move').length;
     this.loopSound('gallop', riding > 0, Math.min(0.45, 0.2 + riding * 0.06));
+    const tanks = this.state.units.filter(u => u.card.type === 'tank' && u.state === 'move').length;
+    this.loopSound('tank-move', tanks > 0, Math.min(0.45, 0.25 + tanks * 0.08));
   }
 
   drawUnits() {
@@ -946,7 +979,7 @@ class Battle extends Phaser.Scene {
         v.burn.setPosition(u.x, fy - 6).setDepth(fy + 0.5).setAlpha(Math.min(1, u.burnRemaining));
       } else if (v.burn) { v.burn.destroy(); v.burn = null; }
 
-      const w = u.card.type === 'cannon' || MOUNTED.has(u.card.type) ? 42 : 26;
+      const w = { tank: 74, hospital: 70 }[u.card.type] ?? (u.card.type === 'cannon' || MOUNTED.has(u.card.type) ? 42 : 26);
       if (!u.hidden || u.side === 'blue') {
         g.fillStyle(TEAM[u.side], u.hidden ? 0.15 : 0.45).fillEllipse(u.x, fy - 1, w, 7);
         const by = fy - (UNIT_HEIGHT[u.card.type] ?? 56);
@@ -1040,6 +1073,19 @@ class Battle extends Phaser.Scene {
   drawEffects(dt) {
     const g = this.fx;
     g.clear();
+    // Artillerie: doelcirkel tijdens de aanloop en vallende granaten vlak voor de inslag.
+    for (const b of this.state.barrages) {
+      const y = LANES[b.lane] + 12, col = b.side === 'blue' ? 0x6fc2ff : 0xff6a5a;
+      const pulse = 0.4 + 0.3 * Math.sin(this.time.now / 120);
+      g.lineStyle(2, col, pulse).strokeEllipse(b.x, y, b.card.spread * 2 + 30, 18);
+      for (const sh of b.shells) {
+        const left = sh.t - b.time;
+        if (sh.done || left > 0.45) continue;
+        const k = 1 - left / 0.45, sx = sh.x - (1 - k) * 60 * (b.side === 'blue' ? 1 : -1), sy = y - (1 - k) * 160;
+        g.lineStyle(2, 0xffb347, 0.6).lineBetween(sx, sy, sx - (b.side === 'blue' ? 10 : -10), sy - 16);
+        g.fillStyle(0x3a3328).fillCircle(sx, sy, 3.4);
+      }
+    }
     this.projectiles = this.projectiles.filter(p => {
       p.t += dt;
       const k = Math.min(1, p.t / p.dur);
@@ -1054,6 +1100,11 @@ class Battle extends Phaser.Scene {
         g.fillStyle(0xff9a2e, 0.45).fillCircle(x - Math.sign(p.x1 - p.x0) * 5, y - 2, 6);
         g.fillStyle(0x9a5428).fillCircle(x, y, 3.8);
         g.fillStyle(0xffd36b).fillCircle(x, y - 3, 2);
+      } else if (p.kind === 'rocket') {   // bazookaraket met vlammetje
+        const d = Math.sign(p.x1 - p.x0);
+        g.fillStyle(0xffa030, 0.6).fillCircle(x - d * 7, y, 3.5);
+        g.fillStyle(0x4a4a3a).fillRect(x - 5, y - 1.6, 10, 3.2);
+        g.fillStyle(0x8a8a6a).fillCircle(x + d * 5, y, 1.8);
       } else if (p.kind === 'vial') {   // gifflesje van de pestdokter
         g.fillStyle(0x7dff4a, 0.3).fillCircle(x, y, 6);
         g.fillStyle(0x3fbf2a).fillCircle(x, y, 3.4);
@@ -1080,7 +1131,7 @@ class Battle extends Phaser.Scene {
           .setBlendMode(Phaser.BlendModes.ADD).play('fx-fire:burst').once('animationcomplete', (_a, _f, spr) => spr.destroy());
         return false;
       }
-      if (k >= 1 && p.kind === 'ball') sfx(this, 'boom');
+      if (k >= 1 && (p.kind === 'ball' || p.kind === 'rocket')) sfx(this, 'boom');
       if (k >= 1 && p.kind === 'vial') {   // giftige groene plons
         for (let i = 0; i < 12; i++) this.fireParts.push({ kind: 'poison', x: p.x1 + (Math.random() - 0.5) * 10, y: p.y1 + 10,
           vx: (Math.random() - 0.5) * 60, vy: -20 - Math.random() * 40, life: 0, max: 0.5 + Math.random() * 0.4, r: 1.5 + Math.random() * 2 });

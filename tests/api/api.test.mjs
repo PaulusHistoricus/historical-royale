@@ -78,7 +78,7 @@ test('profiel: standaardwaarden, vriendcode, alle prestaties en kaarten', { skip
   assert.equal(data.player.level, 1);
   assert.match(data.friendCode, /^[A-Z2-9]{8}$/);
   assert.equal(data.achievements.length, 38);
-  assert.equal(Object.keys(data.cards).length, 18);
+  assert.equal(Object.keys(data.cards).length, 24);
   assert.equal(data.deck.length, 8);
   assert.equal(data.email, 'anna@example.test');
 });
