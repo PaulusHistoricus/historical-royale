@@ -11,10 +11,9 @@ import { BUILD } from './version.js';
 const BASE = import.meta.env.BASE_URL;
 const avatarUrl = key => `${BASE}assets/avatars/${key}.webp?v=${BUILD}`;
 const cardOf = type => CARDS.find(c => c.type === type);
-const NAMES = { melee: 'Legionary', archer: 'Archer', cannon: 'Cannon', cavalry: 'Cavalry', berserker: 'Berserker',
-  horse_archer: 'Horse Archer', musket: 'Musketeer', healer: 'Priestess', samurai: 'Samurai', spy: 'Spy',
-  firethrower: 'Fire Thrower', p51: 'P-51 Mustang',
-  spartan: 'Spartan Guardian', plague: 'Plague Doctor', banner: 'Banner Maiden', flamegi: 'Flamethrower GI', lancer: 'Steppe Lancer', assassin: 'Persian Assassin' };
+// Kaartnamen komen uit CARDS (één bron), met een paar kortere varianten voor kleine vakjes.
+const NAMES = { ...Object.fromEntries(CARDS.map(c => [c.type, c.name])), samurai: 'Samurai', cavalry: 'Cavalry', berserker: 'Berserker',
+  horse_archer: 'Horse Archer' };
 // Prestatie-icoon uit achievements.webp (tools/art/achievements.py).
 function achIcon(key, unlocked, px = 52) {
   const i = ACH_ART.icons[key] ?? 0;
