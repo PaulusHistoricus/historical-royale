@@ -7,6 +7,9 @@ import { W, LANES, FIELD_BOTTOM, CARDS, MATCH_SECONDS, ENERGY_MAX } from './sim/
 import * as sim from './sim/battle.js';
 import { createHand, playFromHand, HAND_SIZE } from './sim/hand.js';
 import UNIT_ART from './art/units.json';
+import PFX from './art/pixelfx.json';   // effecten uit pixelfx (MIT), tools/art/pixelfx.py
+// Proef: pixelfx-effecten aan; met ?classic in de adresbalk de oude effecten (om te vergelijken).
+const USE_PFX = !new URLSearchParams(location.search).has('classic');
 import WORLD_ART from './art/world.json';
 import CARD_ART from './art/cards.json';
 import BAR_ART from './art/cardbar.json';
@@ -163,6 +166,7 @@ class Boot extends Phaser.Scene {
         this.load.spritesheet(`${kind}-${side}`, art(`${kind}-${side}.png`), { frameWidth: def.frameWidth, frameHeight: def.frameHeight });
       }
     }
+    for (const [name, d] of Object.entries(PFX)) this.load.spritesheet('pfx-' + name, art(`pfx-${name}.png`), { frameWidth: d.frameWidth, frameHeight: d.frameHeight });
     this.load.spritesheet('fx-fire', art('fx-fire.jpg'), { frameWidth: FX_ART.fire.frameWidth, frameHeight: FX_ART.fire.frameHeight });
     for (const side of ['blue', 'red']) {
       this.load.spritesheet(`p51-${side}`, art(`p51-${side}.png`), { frameWidth: FX_ART.p51.frameWidth, frameHeight: FX_ART.p51.frameHeight });
@@ -187,6 +191,11 @@ class Boot extends Phaser.Scene {
             repeat: ['idle', 'walk', 'charm'].includes(name) ? -1 : 0 });
         }
       }
+    }
+    for (const [name, d] of Object.entries(PFX)) {
+      this.textures.get('pfx-' + name).setFilter(Phaser.Textures.FilterMode.NEAREST);   // scherpe pixels
+      this.anims.create({ key: 'pfx-' + name, frames: this.anims.generateFrameNumbers('pfx-' + name, { start: 0, end: d.frames - 1 }),
+        frameRate: d.fps, repeat: d.loop ? -1 : 0 });
     }
     this.anims.create({ key: 'fx-fire:burst', frames: this.anims.generateFrameNumbers('fx-fire'), frameRate: 14 });
     this.anims.create({ key: 'fx-fire:burn', frames: this.anims.generateFrameNumbers('fx-fire', { frames: [2, 3, 4, 3] }), frameRate: 10, repeat: -1 });
@@ -383,6 +392,7 @@ class Battle extends Phaser.Scene {
     this.smoke = this.add.graphics().setDepth(996);      // rook van brandende gebouwen
     this.flames = this.add.graphics().setDepth(997).setBlendMode(Phaser.BlendModes.ADD);   // gloed, vlammen, vonken
     this.fireParts = [];
+    this.pfxFires = new Map();   // brandende gebouwen: pixelfx-kampvuren per punt
     this.ground = this.add.graphics().setDepth(1);      // teamcirkels onder eenheden
     this.fx = this.add.graphics().setDepth(1000);       // projectielen, vonken
     this.bars = this.add.graphics().setDepth(1010);     // levensbalken
@@ -657,7 +667,8 @@ class Battle extends Phaser.Scene {
         this.tweens.add({ targets: plus, y: plus.y - 18, alpha: 0, duration: 900, onComplete: () => plus.destroy() });
       } else if (e.type === 'shell') {   // artilleriegranaat slaat in
         const y = LANES[e.lane] + 14;
-        this.add.sprite(e.x, y, 'barrage').setOrigin(0.5, UNIT_ART.barrage.originY).setScale(0.7).setDepth(y + 30)
+        if (USE_PFX) this.pfxBurst('big-explosion', e.x, y, 0.62);
+        else this.add.sprite(e.x, y, 'barrage').setOrigin(0.5, UNIT_ART.barrage.originY).setScale(0.7).setDepth(y + 30)
           .play('barrage:boom').once('animationcomplete', (_a, _f, spr) => spr.destroy());
         const crater = this.add.sprite(e.x, y + 2, 'barrage', UNIT_ART.barrage.anims.crater[0]).setOrigin(0.5, UNIT_ART.barrage.originY)
           .setScale(0.35).setDepth(0.5).setAlpha(0.9);
@@ -734,7 +745,7 @@ class Battle extends Phaser.Scene {
           this.views.delete(e.id);
           this.tweens.add({ targets: view.sprite, alpha: 0, scale: view.sprite.scale * 0.9, duration: 350, onComplete: () => view.sprite.destroy() });
         } else if (view) {
-          if (NO_DEATH_CRY.has(view.type)) { if (view.type === 'tank') { sfx(this, 'boom'); this.cameras.main.shake(250, 0.004); } }
+          if (NO_DEATH_CRY.has(view.type)) { if (view.type === 'tank') { sfx(this, 'boom'); this.cameras.main.shake(250, 0.004); if (USE_PFX) this.pfxBurst('big-explosion', e.x, view.sprite.y + 4, 0.75); } }
           else sfx(this, MOUNTED.has(view.type) ? 'horseDeath' : FEMALE.has(view.type) ? 'deathFemale' : 'deathMale');
           if (e.killerType === 'assassin') this.time.delayedCall(250, () => sfx(this, 'laugh'));
           this.views.delete(e.id);
@@ -1008,12 +1019,24 @@ class Battle extends Phaser.Scene {
   drawFires(dt) {
     const fl = this.flames, sm = this.smoke, t = this.time.now / 1000;
     fl.clear(); sm.clear();
+    const live = new Set();
     this.state.structures.forEach((s, i) => {
       const def = WORLD_ART[s.kind], v = this.structureViews[i];
       const points = FIRES[s.kind][v.sprite.frame.name] ?? [];
       points.forEach(([fx, fy, size, kind], j) => {
         const x = s.x + (fx - def.frameWidth / 2) / TEX, y = v.foot + (fy - def.frameHeight + 2) / TEX;
         const seed = i * 7 + j * 3;
+        if (USE_PFX && !kind && size >= 0.7) {   // grote brand: pixelfx-kampvuur (eigen vlammen, vonken en rook)
+          const key = `${s.id}:${v.sprite.frame.name}:${j}`;
+          live.add(key);
+          let spr = this.pfxFires.get(key);
+          if (!spr) {
+            spr = this.add.sprite(x, y + 3, 'pfx-campfire').setOrigin(PFX.campfire.originX, PFX.campfire.originY)
+              .setScale(0.32 * size).setDepth(v.foot + 1).play({ key: 'pfx-campfire', startFrame: (seed * 5) % PFX.campfire.frames });
+            this.pfxFires.set(key, spr);
+          }
+          return;
+        }
         if (kind === 'smoke') {
           if (Math.random() < dt * 4 * size) this.fireParts.push({ kind: 'smoke', x: x + (Math.random() - 0.5) * 6 * size, y,
             vx: 4 + Math.random() * 5, vy: -14 - Math.random() * 8, life: 0, max: 2.2 + Math.random(), r: 3 * size });
@@ -1030,6 +1053,7 @@ class Battle extends Phaser.Scene {
           vx: (Math.random() - 0.5) * 22, vy: -30 - Math.random() * 40, life: 0, max: 0.7 + Math.random() * 0.9, r: 0.7 + Math.random() * 0.6 });
       });
     });
+    for (const [key, spr] of this.pfxFires) if (!live.has(key)) { spr.destroy(); this.pfxFires.delete(key); }
     if (this.fireParts.length > 600) this.fireParts.splice(0, this.fireParts.length - 600);
     this.fireParts = this.fireParts.filter(p => {
       p.life += dt;
@@ -1056,6 +1080,13 @@ class Battle extends Phaser.Scene {
       }
       return true;
     });
+  }
+
+  /** Eenmalig pixelfx-effect (verdwijnt aan het eind). */
+  pfxBurst(name, x, y, scale) {
+    const d = PFX[name];
+    return this.add.sprite(x, y, 'pfx-' + name).setOrigin(d.originX, d.originY).setScale(scale).setDepth(y + 30)
+      .play('pfx-' + name).once('animationcomplete', (_a, _f, spr) => spr.destroy());
   }
 
   // Instorten: stenen en stof vliegen weg.
