@@ -4,6 +4,8 @@ Hier: om het `step`-de frame (minder frames, kleinere textuur) en verkleind met 
 import json
 from PIL import Image
 
+# Kampvuur zonder houtblokken: onder BASE_CUT (fractie van de framehoogte) blijven alleen heldere vlampixels over.
+BASE_CUT = {'campfire': 0.74}
 EFFECTS = {   # naam -> (frame-stap, schaal, max. frames na het overslaan)
     'campfire': (2, 1.0, 999),
     'big-explosion': (2, 0.5, 60),   # na 4 s is het alleen nog rook
@@ -20,7 +22,17 @@ def build_pixelfx(SRC, OUT, MANIFEST):
         rows = -(-len(idx) // cols)
         sheet = Image.new('RGBA', (w * cols, h * rows))
         for k, i in enumerate(idx):
-            fr = im.crop(((i % c) * fw, (i // c) * fh, (i % c + 1) * fw, (i // c + 1) * fh)).resize((w, h), Image.NEAREST)
+            fr = im.crop(((i % c) * fw, (i // c) * fh, (i % c + 1) * fw, (i // c + 1) * fh))
+            if name in BASE_CUT:
+                import numpy as np
+                a = np.array(fr); y0 = int(fh * BASE_CUT[name])
+                lum = a[y0:, :, :3].max(2).astype(int)
+                ramp = np.clip(1 - (np.arange(fh - y0) / max(1, (fh - y0) * 0.35)), 0, 1)[:, None]   # zachte overgang
+                mid = np.zeros((1, a.shape[1]), bool); mid[:, int(fw * 0.38):int(fw * 0.62)] = True   # houtuiteinden aan de zijkant weg
+                keep = np.where((lum >= 235) & mid, 1.0, ramp)                                     # heldere vlammen blijven
+                a[y0:, :, 3] = (a[y0:, :, 3] * keep).astype(np.uint8)
+                fr = Image.fromarray(a)
+            fr = fr.resize((w, h), Image.NEAREST)
             sheet.alpha_composite(fr, ((k % cols) * w, (k // cols) * h))
         sheet.save(f'{OUT}/pfx-{name}.png', optimize=True)
         info[name] = {'frameWidth': w, 'frameHeight': h, 'frames': len(idx), 'fps': meta['fps'] / stepn, 'loop': meta['loop'],
