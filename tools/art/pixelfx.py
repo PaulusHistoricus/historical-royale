@@ -9,6 +9,11 @@ BASE_CUT = {'campfire': 0.74}
 EFFECTS = {   # naam -> (frame-stap, schaal, max. frames na het overslaan)
     'campfire': (2, 1.0, 999),
     'big-explosion': (2, 0.5, 60),   # na 4 s is het alleen nog rook
+    'dirt-explosion': (2, 0.4, 40),  # inslag van kanon, tank en bazooka
+    'acid-splash': (2, 0.5, 40),     # gifflesje van de Plague Doctor
+    'heal-aoe': (2, 0.5, 40),        # veldhospitaal
+    'hit-spark': (1, 0.5, 16),       # kogelinslag (sniper, musketier)
+    'shield-block': (1, 0.5, 34),    # Spartaan blokt een projectiel
 }
 
 

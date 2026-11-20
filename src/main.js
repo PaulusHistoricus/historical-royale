@@ -650,6 +650,11 @@ class Battle extends Phaser.Scene {
     {
       if (e.type === 'heal') {
         if (this.views.get(e.attackerId)?.type === 'healer') sfx(this, 'heal');
+        const hv = this.views.get(e.attackerId);
+        if (USE_PFX && hv?.type === 'hospital' && now >= (hv.nextRing ?? 0)) {   // genezingsring om de tent, om de 3 s
+          hv.nextRing = now + 3000;
+          this.pfxBurst('heal-aoe', hv.sprite.x, hv.sprite.y + 6, 1.0);
+        }
         const healer = this.views.get(e.attackerId);
         const healAnim = healer && (UNIT_ART[healer.type].anims.heal ? 'heal' : healer.type === 'medic' ? 'attack' : null);
         if (healAnim) {
@@ -714,6 +719,8 @@ class Battle extends Phaser.Scene {
           const ranged = ['archer', 'horse_archer', 'musket', 'plague', 'firethrower', 'sniper', 'bazooka', 'tower', 'castle'].includes(e.kind);
           if (target.type === 'spartan' && ranged && now >= target.lockUntil) {   // schild omhoog tegen projectielen
             target.sprite.anims.play(`${target.sprite.texture.key}:shield_wall`);
+            const g = this.state.units.find(u => u.id === e.targetId);
+            if (USE_PFX && g) this.pfxBurst('shield-block', g.x + g.facing * 10, footY(g) - 6, 0.6, g.facing < 0);
             target.lockUntil = now + target.sprite.anims.currentAnim.duration;
           } else if (target.sprite && now >= target.lockUntil && UNIT_ART[target.type]?.anims.hit.length > 1) {
             target.sprite.anims.play(`${target.sprite.texture.key}:hit`);
@@ -892,6 +899,7 @@ class Battle extends Phaser.Scene {
         .setOrigin(def.originX, def.originY).setScale(1 / TEX);
       const view = { sprite, type: u.card.type, side: u.side, lockUntil: 0, flashUntil: 0, burn: null, revealed: false };
       this.views.set(u.id, view);
+      if (u.card.type === 'hospital' && USE_PFX) this.pfxBurst('heal-aoe', u.x, footY(u) + 6, 1.0);
       if (u.card.type === 'hospital') {   // tent vouwt zich uit
         sprite.anims.play(`${sprite.texture.key}:appear`);
         view.lockUntil = this.time.now + sprite.anims.currentAnim.duration;
@@ -1083,10 +1091,10 @@ class Battle extends Phaser.Scene {
   }
 
   /** Eenmalig pixelfx-effect (verdwijnt aan het eind). */
-  pfxBurst(name, x, y, scale) {
+  pfxBurst(name, x, y, scale, flip = false) {
     const d = PFX[name];
-    return this.add.sprite(x, y, 'pfx-' + name).setOrigin(d.originX, d.originY).setScale(scale).setDepth(y + 30)
-      .play('pfx-' + name).once('animationcomplete', (_a, _f, spr) => spr.destroy());
+    return this.add.sprite(x, y, 'pfx-' + name).setOrigin(flip ? 1 - d.originX : d.originX, d.originY).setScale(scale)
+      .setFlipX(flip).setDepth(y + 30).play('pfx-' + name).once('animationcomplete', (_a, _f, spr) => spr.destroy());
   }
 
   // Instorten: stenen en stof vliegen weg.
@@ -1163,12 +1171,15 @@ class Battle extends Phaser.Scene {
         return false;
       }
       if (k >= 1 && (p.kind === 'ball' || p.kind === 'rocket')) sfx(this, 'boom');
+      if (k >= 1 && p.kind === 'vial' && USE_PFX) { this.pfxBurst('acid-splash', p.x1, p.y1 + 16, 0.75); return false; }
       if (k >= 1 && p.kind === 'vial') {   // giftige groene plons
         for (let i = 0; i < 12; i++) this.fireParts.push({ kind: 'poison', x: p.x1 + (Math.random() - 0.5) * 10, y: p.y1 + 10,
           vx: (Math.random() - 0.5) * 60, vy: -20 - Math.random() * 40, life: 0, max: 0.5 + Math.random() * 0.4, r: 1.5 + Math.random() * 2 });
         return false;
       }
       if (k >= 1 && p.kind === 'arrow' && p.archer) sfx(this, 'arrow');   // pijl van boogschutters (torens niet: te veel)
+      if (k >= 1 && USE_PFX && (p.kind === 'ball' || p.kind === 'rocket')) { this.pfxBurst('dirt-explosion', p.x1, p.y1 + 16, 0.6); return false; }
+      if (k >= 1 && USE_PFX && p.kind === 'bullet') { this.pfxBurst('hit-spark', p.x1, p.y1 + 4, 0.55, p.x1 < p.x0); return false; }
       if (k >= 1) {
         this.sparks.push(p.kind === 'ball'
           ? { x: p.x1, y: p.y1 + 8, t: 0, dur: 0.38, color: 0xffa040, big: true }

@@ -16,5 +16,50 @@
   "loop": false,
   "originX": 0.5,
   "originY": 0.8733
+ },
+ "dirt-explosion": {
+  "frameWidth": 104,
+  "frameHeight": 96,
+  "frames": 40,
+  "fps": 15.0,
+  "loop": false,
+  "originX": 0.5,
+  "originY": 0.8583
+ },
+ "acid-splash": {
+  "frameWidth": 92,
+  "frameHeight": 58,
+  "frames": 40,
+  "fps": 15.0,
+  "loop": false,
+  "originX": 0.5,
+  "originY": 0.8621
+ },
+ "heal-aoe": {
+  "frameWidth": 128,
+  "frameHeight": 68,
+  "frames": 40,
+  "fps": 15.0,
+  "loop": false,
+  "originX": 0.5,
+  "originY": 0.7647
+ },
+ "hit-spark": {
+  "frameWidth": 68,
+  "frameHeight": 40,
+  "frames": 16,
+  "fps": 30.0,
+  "loop": false,
+  "originX": 0.3235,
+  "originY": 0.8
+ },
+ "shield-block": {
+  "frameWidth": 74,
+  "frameHeight": 52,
+  "frames": 34,
+  "fps": 30.0,
+  "loop": false,
+  "originX": 0.2703,
+  "originY": 0.8462
  }
 }
