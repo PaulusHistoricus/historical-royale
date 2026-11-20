@@ -1,0 +1,20 @@
+{
+ "campfire": {
+  "frameWidth": 128,
+  "frameHeight": 128,
+  "frames": 45,
+  "fps": 15.0,
+  "loop": true,
+  "originX": 0.5,
+  "originY": 0.875
+ },
+ "big-explosion": {
+  "frameWidth": 180,
+  "frameHeight": 150,
+  "frames": 60,
+  "fps": 15.0,
+  "loop": false,
+  "originX": 0.5,
+  "originY": 0.8733
+ }
+}

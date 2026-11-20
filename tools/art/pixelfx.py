@@ -1,0 +1,35 @@
+"""Effecten uit pixelfx (MIT, https://github.com/patch-gg/pixelfx; licentie in art/source/pixelfx/LICENSE).
+Geëxporteerd met `node tools/sheets.mjs <id>` in een pixelfx-checkout -> art/source/pixelfx/<naam>.png/.json.
+Hier: om het `step`-de frame (minder frames, kleinere textuur) en verkleind met `scale` (nearest)."""
+import json
+from PIL import Image
+
+EFFECTS = {   # naam -> (frame-stap, schaal, max. frames na het overslaan)
+    'campfire': (2, 1.0, 999),
+    'big-explosion': (2, 0.5, 60),   # na 4 s is het alleen nog rook
+}
+
+
+def build_pixelfx(SRC, OUT, MANIFEST):
+    info = {}
+    for name, (stepn, scale, maxn) in EFFECTS.items():
+        meta = json.load(open(f'{SRC}pixelfx/{name}.json'))['meta']['pixelfx']
+        im = Image.open(f'{SRC}pixelfx/{name}.png').convert('RGBA')
+        fw, fh = meta['frameSize']; c = meta['columns']; idx = list(range(0, meta['frames'], stepn))[:maxn]
+        w, h = round(fw * scale), round(fh * scale); cols = min(len(idx), max(1, 2000 // w))
+        rows = -(-len(idx) // cols)
+        sheet = Image.new('RGBA', (w * cols, h * rows))
+        for k, i in enumerate(idx):
+            fr = im.crop(((i % c) * fw, (i // c) * fh, (i % c + 1) * fw, (i // c + 1) * fh)).resize((w, h), Image.NEAREST)
+            sheet.alpha_composite(fr, ((k % cols) * w, (k // cols) * h))
+        sheet.save(f'{OUT}/pfx-{name}.png', optimize=True)
+        info[name] = {'frameWidth': w, 'frameHeight': h, 'frames': len(idx), 'fps': meta['fps'] / stepn, 'loop': meta['loop'],
+                      'originX': round(meta['pivot'][0] / fw, 4), 'originY': round(meta['pivot'][1] / fh, 4)}
+    json.dump(info, open(MANIFEST, 'w'), indent=1)
+    return info
+
+
+if __name__ == '__main__':
+    import os
+    root = os.path.join(os.path.dirname(__file__), '..', '..')
+    print(build_pixelfx(root + '/art/source/', root + '/public/assets/art', root + '/src/art/pixelfx.json'))
